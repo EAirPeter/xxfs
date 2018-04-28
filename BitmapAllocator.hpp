@@ -5,28 +5,34 @@
 
 #include "Raii.hpp"
 
-class BitmapAllocator {
-public:
-    BitmapAllocator(
-        int fd, uint32_t &cUsed,
-        uint32_t bnoBmpBmp, uint32_t cBmpBmpBlk,
-        uint32_t bnoBmp
-    );
+namespace xxfs {
+
+class BitmapAllocator : NoCopyMove {
+private:
+    struct X_Deleter {
+        inline void operator ()(void *pObj) noexcept {
+            munmap(pObj, cbSize);
+        }
+
+        size_t cbSize;
+    };
+    
+    using X_BmpPtr = std::unique_ptr<uint64_t[], X_Deleter>;
+    static X_BmpPtr X_Map(int fd, uint32_t lcn, uint32_t cc);
 
 public:
+    BitmapAllocator(int fd, uint32_t lcnBmp, uint32_t ccBmp);
+
     uint32_t Alloc();
-    void Free(uint32_t idxBit);
+    void Free(uint32_t lbi) noexcept;
 
 private:
-    int x_fd;
-    uint32_t &x_cUsed;
-    uint32_t x_bnoBmp;
-    uint32_t x_cBmpBmpQwd;
-    uint32_t x_idxCurBmpBlk = 0;
-    uint32_t x_cCurBit = 0;
-    MapPtr<uint64_t> x_rpBmpBmp;
-    MapPtr<uint64_t> x_rpCurBmp;
+    uint32_t x_vqwCur = 0;
+    uint32_t x_cqBmp;
+    X_BmpPtr x_upBmp;
 
 };
+
+}
 
 #endif

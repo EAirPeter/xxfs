@@ -1,18 +1,24 @@
 #include "Common.hpp"
 
+namespace xxfs {
+
+namespace {
+
 template<class tObj>
-constexpr static bool IsBlock = std::is_pod_v<tObj> && sizeof(tObj) == kcbBlkSize;
+constexpr static bool IsCluster = std::is_pod_v<tObj> && sizeof(tObj) == kcbCluSize;
 
-static_assert(IsBlock<SuperBlock>);
-static_assert(IsBlock<BitmapBlock>);
-static_assert(IsBlock<IndexBlock>);
-static_assert(IsBlock<InodeBlock>);
-static_assert(IsBlock<DirBlock>);
-static_assert(IsBlock<FileBlock>);
+static_assert(IsCluster<MetaCluster>);
+static_assert(IsCluster<BitmapCluster>);
+static_assert(IsCluster<IndexCluster>);
+static_assert(IsCluster<InodeCluster>);
+static_assert(IsCluster<DirCluster>);
+static_assert(IsCluster<ByteCluster>);
 
-static_assert(kcbBlkSize >= PATH_MAX);
-static_assert(kcEntPerStack >= NAME_MAX);
+static_assert(kcbCluSize >= PATH_MAX);
+static_assert(kcePerClu >= NAME_MAX);
 static_assert(sizeof(uint64_t) >= sizeof(uintptr_t));
+
+}
 
 void FatalException::ShowWhat(FILE *pFile) const noexcept {
     fprintf(
@@ -21,77 +27,63 @@ void FatalException::ShowWhat(FILE *pFile) const noexcept {
     );
 }
 
-SuperBlockResult FillSuperBlock(SuperBlock *pSuperBlk, size_t cbSize) {
+MetaResult FillMeta(MetaCluster *pcMeta, size_t cbSize) {
     if (cbSize > kcbMaxSize)
-        return SuperBlockResult::kTooLarge;
+        return MetaResult::kTooLarge;
     if (cbSize < kcbMinSize)
-        return SuperBlockResult::kTooSmall;
-    if (cbSize % kcbBlkSize)
-        return SuperBlockResult::kPartial;
-    auto cBlock = (uint32_t) (cbSize / kcbBlkSize);
-    auto cbBnoBmpSize = (cBlock + 7) / 8;
-    auto cBnoBmpBlk = (cbBnoBmpSize + kcbBlkSize - 1) / kcbBlkSize;
-    auto cbBnoBmpBmpSize = (cBnoBmpBlk + 7) / 8;
-    auto cBnoBmpBmpBlk = (cbBnoBmpBmpSize + kcbBlkSize - 1) / kcbBlkSize;
-    auto cInodeUpper = cBlock - cbBnoBmpSize;
-    uint32_t cInode = 0;
-    while (cInode + 1 < cInodeUpper) {
-        auto cInodeMid = (cInode + cInodeUpper) / 2;
-        auto cbInoBmpSize =  (cInodeMid + 7) / 8;
-        auto cInoBmpBlk = (cbInoBmpSize + kcbBlkSize - 1) / kcbBlkSize;
-        auto cbInoBmpBmpSize = (cInoBmpBlk + 7) / 8;
-        auto cInoBmpBmpBlk = (cbInoBmpBmpSize + kcbBlkSize - 1) / kcbBlkSize;
-        auto cNodBlk =  (cInodeMid + kcNodPerBlk - 1) / kcNodPerBlk;
-        auto cUsedBlk = 1 + cBnoBmpBmpBlk + cInoBmpBmpBlk + cBnoBmpBlk + cInoBmpBlk + cNodBlk;
-        if (cUsedBlk + cInodeMid - 1 <= cBlock)
-            cInode = cInodeMid;
+        return MetaResult::kTooSmall;
+    if (cbSize % kcbCluSize)
+        return MetaResult::kPartial;
+    auto ccTotal = (uint32_t) (cbSize / kcbCluSize);
+    auto cqCluBmp = (ccTotal + 63) / 64;
+    auto ccCluBmp = (cqCluBmp + kcqPerClu - 1) / kcqPerClu;
+    auto ciUpper = ccTotal - ccCluBmp;
+    uint32_t ciTotal = 0;
+    while (ciTotal + 1 < ciUpper) {
+        auto ci = (ciTotal + ciUpper) / 2;
+        auto cqInoBmp =  (ci + 63) / 64;
+        auto ccInoBmp = (cqInoBmp + kcqPerClu - 1) / kcqPerClu;
+        auto ccIno =  (ci + kciPerClu - 1) / kciPerClu;
+        auto ccOther = 1 + ccCluBmp + ccInoBmp + ccIno;
+        if (ccOther + ci - 1 <= ccTotal)
+            ciTotal = ci;
         else
-            cInodeUpper = cInodeMid;
+            ciUpper = ci;
     }
-    auto cbInoBmpSize = (cInode + 7) / 8;
-    auto cInoBmpBlk = (cbInoBmpSize + kcbBlkSize - 1) / kcbBlkSize;
-    auto cbInoBmpBmpSize = (cInoBmpBlk + 7) / 8;
-    auto cInoBmpBmpBlk = (cbInoBmpBmpSize + kcbBlkSize - 1) / kcbBlkSize;
-    auto cNodBlk =  (cInode + kcNodPerBlk - 1) / kcNodPerBlk;
-    auto bnoBnoBmpBmp = 1;
-    auto bnoInoBmpBmp = cBnoBmpBmpBlk + bnoBnoBmpBmp;
-    auto bnoBnoBmp = cInoBmpBmpBlk + bnoInoBmpBmp;
-    auto bnoInoBmp = cBnoBmpBlk + bnoBnoBmp;
-    auto bnoNod = cInoBmpBlk + bnoInoBmp;
-    auto cUsedBlk = 1 + cBnoBmpBmpBlk + cInoBmpBmpBlk + cBnoBmpBlk + cInoBmpBlk + cNodBlk;
-    auto cUsedNod = 1;
-    pSuperBlk->uSign = kSign;
-    pSuperBlk->cbSize = (uint64_t) cbSize;
-    pSuperBlk->bnoBnoBmp = bnoBnoBmp;
-    pSuperBlk->cBlock = cBlock;
-    pSuperBlk->cbBnoBmpSize = cbBnoBmpSize;
-    pSuperBlk->cBnoBmpBlk = cBnoBmpBlk;
-    pSuperBlk->bnoBnoBmpBmp = bnoBnoBmpBmp;
-    pSuperBlk->cbBnoBmpBmpSize = cbBnoBmpBmpSize;
-    pSuperBlk->cBnoBmpBmpBlk = cBnoBmpBmpBlk;
-    pSuperBlk->bnoInoBmp = bnoInoBmp;
-    pSuperBlk->cInode = cInode;
-    pSuperBlk->cbInoBmpSize = cbInoBmpSize;
-    pSuperBlk->cInoBmpBlk = cInoBmpBlk;
-    pSuperBlk->bnoInoBmpBmp = bnoInoBmpBmp;
-    pSuperBlk->cbInoBmpBmpSize = cbInoBmpBmpSize;
-    pSuperBlk->cInoBmpBmpBlk = cInoBmpBmpBlk;
-    pSuperBlk->bnoNod = bnoNod;
-    pSuperBlk->cNodBlk = cNodBlk;
-    pSuperBlk->cUsedBlk = cUsedBlk;
-    pSuperBlk->cUsedNod = cUsedNod;
-    memset(pSuperBlk->aZero, 0, sizeof(pSuperBlk->aZero));
-    return SuperBlockResult::kSuccess;
+    auto cqInoBmp =  (ciTotal + 63) / 64;
+    auto ccInoBmp = (cqInoBmp + kcqPerClu - 1) / kcqPerClu;
+    auto ccIno =  (ciTotal + kciPerClu - 1) / kciPerClu;
+    auto lcnCluBmp = 1;
+    auto lcnInoBmp = ccCluBmp + lcnCluBmp;
+    auto lcnIno = ccInoBmp + lcnInoBmp;
+    auto ccUsed = ccIno + lcnIno;
+    auto ciUsed = 1;
+    pcMeta->uSign = kSign;
+    pcMeta->cbSize = (uint64_t) cbSize;
+    pcMeta->ccTotal = ccTotal;
+    pcMeta->ciTotal = ciTotal;
+    pcMeta->lcnCluBmp = lcnCluBmp;
+    pcMeta->ccCluBmp = ccCluBmp;
+    pcMeta->lcnInoBmp = lcnInoBmp;
+    pcMeta->ccInoBmp = ccInoBmp;
+    pcMeta->lcnIno = lcnIno;
+    pcMeta->ccIno = ccIno;
+    pcMeta->ccUsed = ccUsed;
+    pcMeta->ciUsed = ciUsed;
+    memset(pcMeta->aZeros, 0, sizeof(pcMeta->aZeros));
+    return MetaResult::kSuccess;
 }
 
 void CheckPageSize() {
     auto ncbPageSize = sysconf(_SC_PAGESIZE);
-    if (ncbPageSize != (long) kcbBlkSize) {
+    if (ncbPageSize != (long) kcbCluSize) {
         fprintf(
             stderr,
             "Warning: Actual page size (%ld B) does not equal to predefined page size (%ld B)",
             ncbPageSize,
-            (long) kcbBlkSize
+            (long) kcbCluSize
         );
     }
+}
+
 }

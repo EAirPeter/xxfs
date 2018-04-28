@@ -3,23 +3,29 @@
 #include "Raii.hpp"
 #include "Xxfs.hpp"
 
-inline static Xxfs *GetXxfs(fuse_req_t pReq) {
+namespace xxfs {
+
+namespace {
+
+inline Xxfs *GetXxfs(fuse_req_t pReq) {
     return (Xxfs *) fuse_req_userdata(pReq);
 }
 
-constexpr static uint32_t GetIno(fuse_ino_t ino) {
+constexpr uint32_t GetLcn(fuse_ino_t ino) {
     return (uint32_t) (ino - FUSE_ROOT_ID);
 }
 
-constexpr static fuse_ino_t GetFuse(uint32_t ino) {
+constexpr fuse_ino_t GetFino(uint32_t ino) {
     return (fuse_ino_t) ino + FUSE_ROOT_ID;
+}
+
 }
 
 void XxfsLookup(fuse_req_t pReq, fuse_ino_t inoPar, const char *pszName) {
     try {
         auto pXxfs = GetXxfs(pReq);
         fuse_entry_param vEntry {};
-        vEntry.ino = GetFuse(pXxfs->Lookup(vEntry.attr, GetIno(inoPar), pszName));
+        vEntry.ino = GetFino(pXxfs->Lookup(vEntry.attr, GetLcn(inoPar), pszName));
         vEntry.entry_timeout = std::numeric_limits<double>::infinity();
         vEntry.attr_timeout = std::numeric_limits<double>::infinity();
         fuse_reply_entry(pReq, &vEntry);
@@ -37,7 +43,7 @@ void XxfsLookup(fuse_req_t pReq, fuse_ino_t inoPar, const char *pszName) {
 void XxfsForget(fuse_req_t pReq, fuse_ino_t ino, uint64_t cLookup) {
     try {
         auto pXxfs = GetXxfs(pReq);
-        pXxfs->Forget(GetIno(ino), cLookup);
+        pXxfs->Forget(GetLcn(ino), cLookup);
         fuse_reply_none(pReq);
     }
     catch (Exception &e) {
@@ -54,7 +60,7 @@ void XxfsGetAttr(fuse_req_t pReq, fuse_ino_t ino, fuse_file_info *) {
     try {
         auto pXxfs = GetXxfs(pReq);
         struct stat vStat {};
-        pXxfs->GetAttr(vStat, GetIno(ino));
+        pXxfs->GetAttr(vStat, GetLcn(ino));
         fuse_reply_attr(pReq, &vStat, std::numeric_limits<double>::infinity());
     }
     catch (Exception &e) {
@@ -70,8 +76,8 @@ void XxfsGetAttr(fuse_req_t pReq, fuse_ino_t ino, fuse_file_info *) {
 void XxfsReadLink(fuse_req_t pReq, fuse_ino_t ino) {
     try {
         auto pXxfs = GetXxfs(pReq);
-        auto rpBlk = pXxfs->ReadLink(GetIno(ino));
-        fuse_reply_readlink(pReq, rpBlk.Get());
+        auto spRes = pXxfs->ReadLink(GetLcn(ino));
+        fuse_reply_readlink(pReq, spRes.get());
     }
     catch (Exception &e) {
         fprintf(stderr, "readlink: %d\n", e.nErrno);
@@ -88,7 +94,7 @@ void XxfsMkDir(fuse_req_t pReq, fuse_ino_t inoPar, const char *pszName, mode_t) 
     try {
         auto pXxfs = GetXxfs(pReq);
         fuse_entry_param vEntry {};
-        vEntry.ino = GetFuse(pXxfs->MkDir(vEntry.attr, GetIno(inoPar), pszName));
+        vEntry.ino = GetFino(pXxfs->MkDir(vEntry.attr, GetLcn(inoPar), pszName));
         vEntry.entry_timeout = std::numeric_limits<double>::infinity();
         vEntry.attr_timeout = std::numeric_limits<double>::infinity();
         fuse_reply_entry(pReq, &vEntry);
@@ -106,7 +112,7 @@ void XxfsMkDir(fuse_req_t pReq, fuse_ino_t inoPar, const char *pszName, mode_t) 
 void XxfsUnlink(fuse_req_t pReq, fuse_ino_t inoPar, const char *pszName) {
     try {
         auto pXxfs = GetXxfs(pReq);
-        pXxfs->Unlink(GetIno(inoPar), pszName);
+        pXxfs->Unlink(GetLcn(inoPar), pszName);
         fuse_reply_err(pReq, 0);
     }
     catch (Exception &e) {
@@ -122,7 +128,7 @@ void XxfsUnlink(fuse_req_t pReq, fuse_ino_t inoPar, const char *pszName) {
 void XxfsRmDir(fuse_req_t pReq, fuse_ino_t inoPar, const char *pszName) {
     try {
         auto pXxfs = GetXxfs(pReq);
-        pXxfs->RmDir(GetIno(inoPar), pszName);
+        pXxfs->RmDir(GetLcn(inoPar), pszName);
         fuse_reply_err(pReq, 0);
     }
     catch (Exception &e) {
@@ -139,7 +145,7 @@ void XxfsSymLink(fuse_req_t pReq, const char *pszLink, fuse_ino_t inoPar, const 
     try {
         auto pXxfs = GetXxfs(pReq);
         fuse_entry_param vEntry {};
-        vEntry.ino = GetFuse(pXxfs->SymLink(vEntry.attr, pszLink, GetIno(inoPar), pszName));
+        vEntry.ino = GetFino(pXxfs->SymLink(vEntry.attr, pszLink, GetLcn(inoPar), pszName));
         vEntry.entry_timeout = std::numeric_limits<double>::infinity();
         vEntry.attr_timeout = std::numeric_limits<double>::infinity();
         fuse_reply_entry(pReq, &vEntry);
@@ -162,7 +168,7 @@ void XxfsRename(
 ) {
     try {
         auto pXxfs = GetXxfs(pReq);
-        pXxfs->Rename(GetIno(inoPar), pszName, GetIno(inoNewPar), pszNewName, uFlags);
+        pXxfs->Rename(GetLcn(inoPar), pszName, GetLcn(inoNewPar), pszNewName, uFlags);
         fuse_reply_err(pReq, 0);
     }
     catch (Exception &e) {
@@ -179,7 +185,7 @@ void XxfsLink(fuse_req_t pReq, fuse_ino_t ino, fuse_ino_t inoNewPar, const char 
     try {
         auto pXxfs = GetXxfs(pReq);
         fuse_entry_param vEntry {};
-        pXxfs->Link(vEntry.attr, GetIno(ino), GetIno(inoNewPar), pszNewName);
+        pXxfs->Link(vEntry.attr, GetLcn(ino), GetLcn(inoNewPar), pszNewName);
         vEntry.ino = ino;
         vEntry.entry_timeout = std::numeric_limits<double>::infinity();
         vEntry.attr_timeout = std::numeric_limits<double>::infinity();
@@ -198,7 +204,7 @@ void XxfsLink(fuse_req_t pReq, fuse_ino_t ino, fuse_ino_t inoNewPar, const char 
 void XxfsOpen(fuse_req_t pReq, fuse_ino_t ino, fuse_file_info *pInfo) {
     try {
         auto pXxfs = GetXxfs(pReq);
-        pInfo->fh = (uint64_t) (uintptr_t) pXxfs->Open(GetIno(ino), pInfo);
+        pInfo->fh = (uint64_t) (uintptr_t) pXxfs->Open(GetLcn(ino), pInfo);
         fuse_reply_open(pReq, pInfo);
     }
     catch (Exception &e) {
@@ -214,9 +220,9 @@ void XxfsOpen(fuse_req_t pReq, fuse_ino_t ino, fuse_file_info *pInfo) {
 void XxfsRead(fuse_req_t pReq, fuse_ino_t, size_t cbSize, off_t cbOff, fuse_file_info *pInfo) {
     try {
         auto pXxfs = GetXxfs(pReq);
-        PodPtr<uint8_t> rpBuf;
-        uint64_t cbRes = pXxfs->Read((void *) (uintptr_t) pInfo->fh, rpBuf, (uint64_t) cbSize, (uint64_t) cbOff);
-        fuse_reply_buf(pReq, (char *) rpBuf.Get(), cbRes);
+        std::unique_ptr<char []> upBuf;
+        auto cbRes = pXxfs->Read((OpenedFile *) (uintptr_t) pInfo->fh, upBuf, (uint64_t) cbSize, (uint64_t) cbOff);
+        fuse_reply_buf(pReq, upBuf.get(), (size_t) cbRes);
     }
     catch (Exception &e) {
         fprintf(stderr, "read: %d\n", e.nErrno);
@@ -231,11 +237,11 @@ void XxfsRead(fuse_req_t pReq, fuse_ino_t, size_t cbSize, off_t cbOff, fuse_file
 void XxfsWrite(fuse_req_t pReq, fuse_ino_t, const char *pBuf, size_t cbSize, off_t cbOff, fuse_file_info *pInfo) {
     try {
         auto pXxfs = GetXxfs(pReq);
-        uint64_t cbRes = pXxfs->Write(
-            (void *) (uintptr_t) pInfo->fh, (const uint8_t *) pBuf,
+        auto cbRes = pXxfs->Write(
+            (OpenedFile *) (uintptr_t) pInfo->fh, pBuf,
             (uint64_t) cbSize, (uint64_t) cbOff
         );
-        fuse_reply_write(pReq, cbRes);
+        fuse_reply_write(pReq, (size_t) cbRes);
     }
     catch (Exception &e) {
         fprintf(stderr, "write: %d\n", e.nErrno);
@@ -250,7 +256,7 @@ void XxfsWrite(fuse_req_t pReq, fuse_ino_t, const char *pBuf, size_t cbSize, off
 void XxfsRelease(fuse_req_t pReq, fuse_ino_t, fuse_file_info *pInfo) {
     //try {
         auto pXxfs = GetXxfs(pReq);
-        pXxfs->Release((void *) (uintptr_t) pInfo->fh);
+        pXxfs->Release((OpenedFile *) (uintptr_t) pInfo->fh);
         fuse_reply_err(pReq, 0);
     /*}
     catch (Exception &e) {
@@ -266,7 +272,7 @@ void XxfsRelease(fuse_req_t pReq, fuse_ino_t, fuse_file_info *pInfo) {
 void XxfsFSync(fuse_req_t pReq, fuse_ino_t, int, fuse_file_info *pInfo) {
     //try {
         auto pXxfs = GetXxfs(pReq);
-        pXxfs->FSync((void *) (uintptr_t) pInfo->fh);
+        pXxfs->FSync((OpenedFile *) (uintptr_t) pInfo->fh);
         fuse_reply_err(pReq, 0);
     /*}
     catch (Exception &e) {
@@ -282,7 +288,7 @@ void XxfsFSync(fuse_req_t pReq, fuse_ino_t, int, fuse_file_info *pInfo) {
 void XxfsOpenDir(fuse_req_t pReq, fuse_ino_t ino, fuse_file_info *pInfo) {
     try {
         auto pXxfs = GetXxfs(pReq);
-        pInfo->fh = (uint64_t) (uintptr_t) pXxfs->OpenDir(GetIno(ino));
+        pInfo->fh = (uint64_t) (uintptr_t) pXxfs->OpenDir(GetLcn(ino));
         fuse_reply_open(pReq, pInfo);
     }
     catch (Exception &e) {
@@ -298,12 +304,65 @@ void XxfsOpenDir(fuse_req_t pReq, fuse_ino_t ino, fuse_file_info *pInfo) {
 void XxfsReadDir(fuse_req_t pReq, fuse_ino_t, size_t cbSize, off_t vOff, fuse_file_info *pInfo) {
     try {
         auto pXxfs = GetXxfs(pReq);
-        PodPtr<char> rpBuf = ::operator new(cbSize);
-        auto cbRes = pXxfs->ReadDir((void *) (uintptr_t) pInfo->fh, pReq, rpBuf.Get(), cbSize, vOff);
-        fuse_reply_buf(pReq, rpBuf.Get(), cbRes);
+        auto upBuf = std::make_unique<char[]>(cbSize);
+        auto cbRes = pXxfs->ReadDir((OpenedDir *) (uintptr_t) pInfo->fh, pReq, upBuf.get(), cbSize, vOff);
+        fuse_reply_buf(pReq, upBuf.get(), cbRes);
     }
     catch (Exception &e) {
         fprintf(stderr, "readdir: %d\n", e.nErrno);
+        fuse_reply_err(pReq, e.nErrno);
+    }
+    catch (FatalException &e) {
+        e.ShowWhat(stderr);
+        exit(-1);
+    }
+}
+
+void XxfsReleaseDir(fuse_req_t pReq, fuse_ino_t, fuse_file_info *pInfo) {
+    try {
+        auto pXxfs = GetXxfs(pReq);
+        pXxfs->ReleaseDir((OpenedDir *) (uintptr_t) pInfo->fh);
+        fuse_reply_err(pReq, 0);
+    }
+    catch (Exception &e) {
+        fprintf(stderr, "releasedir: %d\n", e.nErrno);
+        fuse_reply_err(pReq, e.nErrno);
+    }
+    catch (FatalException &e) {
+        e.ShowWhat(stderr);
+        exit(-1);
+    }
+}
+
+void XxfsStatFs(fuse_req_t pReq, fuse_ino_t) {
+    try {
+        auto pXxfs = GetXxfs(pReq);
+        struct statvfs vStat {};
+        pXxfs->StatFs(vStat);
+        fuse_reply_statfs(pReq, &vStat);
+    }
+    catch (Exception &e) {
+        fprintf(stderr, "releasedir: %d\n", e.nErrno);
+        fuse_reply_err(pReq, e.nErrno);
+    }
+    catch (FatalException &e) {
+        e.ShowWhat(stderr);
+        exit(-1);
+    }
+}
+
+void XxfsCreate(fuse_req_t pReq, fuse_ino_t inoPar, const char *pszName, mode_t, fuse_file_info *pInfo) {
+    // mode is ignored
+    try {
+        auto pXxfs = GetXxfs(pReq);
+        fuse_entry_param vEntry {};
+        pInfo->fh = (uint64_t) (uintptr_t) pXxfs->Create(vEntry, GetLcn(inoPar), pszName);
+        pInfo->direct_io = false;
+        pInfo->keep_cache = false;
+        fuse_reply_entry(pReq, &vEntry);
+    }
+    catch (Exception &e) {
+        fprintf(stderr, "releasedir: %d\n", e.nErrno);
         fuse_reply_err(pReq, e.nErrno);
     }
     catch (FatalException &e) {
@@ -335,6 +394,25 @@ constexpr static fuse_lowlevel_ops XxfsOps() {
     vOps.fsync = &XxfsFSync;
     vOps.opendir = &XxfsOpenDir;
     vOps.readdir = &XxfsReadDir;
+    //  .fsyncdir
+    vOps.statfs = &XxfsStatFs;
+    //  .setxattr
+    //  .getxattr
+    //  .listxattr
+    //  .removexattr
+    //  .access
+    vOps.create = &XxfsCreate;
+    //  .getlk
+    //  .setlk
+    //  .bmap
+    //  .ioctl
+    //  .poll
+    //  .write_buf
+    //  .retrieve_reply
+    //  .forget_multi
+    //  .flock
+    //  .fallocate
+    //  .readdirplus
     return vOps;
 }
 
@@ -342,6 +420,8 @@ constexpr static fuse_opt f_aXxfsOpts[] {
     {"--file=%s", 0, 0},
     FUSE_OPT_END
 };
+
+}
 
 static void ShowHelp(const char *pszExec) {
     printf(
@@ -357,6 +437,7 @@ static void ShowHelp(const char *pszExec) {
 }
 
 int main(int ncArg, char *ppszArgs[]) {
+    using namespace xxfs;
     fuse_args vArgs = FUSE_ARGS_INIT(ncArg, ppszArgs);
     fuse_cmdline_opts vFuseOpts;
     if (fuse_parse_cmdline(&vArgs, &vFuseOpts)) {
@@ -384,36 +465,37 @@ int main(int ncArg, char *ppszArgs[]) {
         fprintf(stderr, "No file specified.\n");
         return -1;
     }
-    RaiiFile roFile {open(pszPath, O_RDWR | O_DIRECT), &close};
-    if (!roFile) {
+    auto fd = open(pszPath, O_RDWR | O_DIRECT);
+    if (fd == -1) {
         fprintf(stderr, "Failed to open file: %s.\n", pszPath);
         return -1;
     }
-    struct stat vStat;
-    if (fstat(roFile.Get(), &vStat)) {
+    RaiiFile vRf(fd);
+    FileStat vStat;
+    if (fstat(fd, &vStat)) {
         fprintf(stderr, "Failed to get the file\'s attributes.\n");
         return -1;
     }
-    SuperBlock vRefSupBlk;
-    if (FillSuperBlock(&vRefSupBlk, (size_t) vStat.st_size) != SuperBlockResult::kSuccess) {
+    MetaCluster cluMeta;
+    if (FillMeta(&cluMeta, (size_t) vStat.st_size) != MetaResult::kSuccess) {
         fprintf(stderr, "The filesystem is corrupt.\n");
         return -1;
     }
-    MapPtr<SuperBlock> rpSupBlk;
+    ShrPtr<MetaCluster> spcMeta;
     try {
-        rpSupBlk = MapAt<SuperBlock>(roFile.Get(), 0);
+        spcMeta = ShrMap<MetaCluster>(fd, 0);
     }
     catch (FatalException &e) {
         e.ShowWhat(stderr);
         return -1;
     }
-    if (memcmp(&vRefSupBlk, rpSupBlk.Get(), kcbSupBlkStatic)) {
+    if (memcmp(&cluMeta, spcMeta.get(), kcbMetaStatic)) {
         fprintf(stderr, "The filesystem is corrupt.\n");
         return -1;
     }
     std::aligned_storage_t<sizeof(Xxfs)> vXxfs;
     try {
-        ::new(&vXxfs) Xxfs {std::move(roFile), std::move(rpSupBlk)};
+        ::new(&vXxfs) Xxfs {std::move(vRf), std::move(spcMeta)};
     }
     catch (FatalException &e) {
         e.ShowWhat(stderr);
