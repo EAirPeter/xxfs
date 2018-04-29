@@ -16,7 +16,7 @@ Inode *InodeCache::At(uint32_t lin) {
     return &it->second.spc->aInos[vin];
 }
 
-Inode *InodeCache::IncLookup(uint32_t lin) {
+Inode *InodeCache::IncLookup(uint32_t lin) noexcept {
     auto vin = lin % kciPerClu;
     auto vcn = lin / kciPerClu;
     auto it = x_map.find(vcn);
@@ -41,12 +41,12 @@ void InodeCache::DecLookup(uint32_t lin, uint64_t cLookup) {
     if (it == x_map.end())
         throw Exception {ENOENT};
     auto &vAct = it->second;
-    if (!--vAct.cInoLookup[vin]) {
+    if (!(vAct.cInoLookup[vin] -= cLookup)) {
         auto pi = &vAct.spc->aInos[vin];
         if (!pi->cLink)
             x_px->Y_EraseIno(lin, pi);
     }
-    if (!--vAct.cCluLookup)
+    if (!(vAct.cCluLookup -= cLookup))
         x_map.erase(it);
 }
 

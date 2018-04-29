@@ -3,10 +3,12 @@
 
 #define FUSE_USE_VERSION 31
 
+#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <fuse_lowlevel.h>
 #include <inttypes.h>
+#include <linux/fs.h>
 #include <linux/limits.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -165,7 +167,8 @@ constexpr uint32_t kvcnIdx3 = kvcnIdx2 + kccIdx2;
 struct Inode {
     uint64_t cbSize;
     uint32_t ccSize;
-    uint32_t uMode;
+    uint16_t uMode;
+    uint16_t x_uPad;
     uint32_t cLink;
     uint32_t lcnIdx0[kccIdx0];
     uint32_t lcnIdx1;
@@ -194,8 +197,7 @@ struct InodeCluster {
 
 struct DirEnt{
     // inode number to the entry if not root
-    // number of the first available entry if root
-    // available entries are linked using linFile instead of lenNext
+    // number of entrys used if root
     uint32_t linFile;
     uint32_t lenNext;
     uint32_t lenChild;

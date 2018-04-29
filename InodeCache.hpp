@@ -3,6 +3,8 @@
 
 #include "Common.hpp"
 
+#include "Raii.hpp"
+
 namespace xxfs {
 
 class Xxfs;
@@ -21,8 +23,8 @@ public:
     inline InodeCache(Xxfs *px) : x_px {px} {}
 
     Inode *At(uint32_t lin);
-    Inode *IncLookup(uint32_t lin);
-    void DecLookup(uint32_t lin, uint64_t cLookup);
+    Inode *IncLookup(uint32_t lin) noexcept;
+    void DecLookup(uint32_t lin, uint64_t cLookup = 1);
 
 private:
     Xxfs *const x_px;

@@ -3,11 +3,14 @@
 
 #include "Common.hpp"
 
-#include "Xxfs.hpp"
+#include "Raii.hpp"
 
 namespace xxfs {
 
+class Xxfs;
+
 // allocations of cluster (for a file) are handled in this class
+template<bool kAlloc>
 class FilePointer : NoCopyMove {
 public:
     constexpr FilePointer() noexcept :
@@ -21,14 +24,21 @@ public:
         ShrSync(x_sp3);
     }
 
-    template<class tObj, bool kAlloc = false>
+    template<class tObj>
+    inline ShrPtr<tObj> Get() noexcept {
+        return std::reinterpret_pointer_cast<tObj>(x_sp);
+    }
+
+    template<class tObj>
     inline ShrPtr<tObj> Seek(Xxfs *px, Inode *pi, uint32_t vcn) noexcept(!kAlloc) {
-        return std::reinterpret_pointer_cast<tObj>(X_Seek<kAlloc>(px, pi, vcn));
+        return std::reinterpret_pointer_cast<tObj>(X_Seek(px, pi, vcn));
     }
 
 private:
-    template<bool kAlloc>
     ShrPtr<void> X_Seek(Xxfs *px, Inode *pi, uint32_t vcn) noexcept(!kAlloc);
+    void X_Seek0(Xxfs *px, Inode *pi, uint32_t vcnOff, uint32_t vcn, uint32_t *pLcns) noexcept(!kAlloc);
+    void X_Seek1(Xxfs *px, Inode *pi, uint32_t vcnOff, uint32_t vcn, uint32_t *pLcns) noexcept(!kAlloc);
+    void X_Seek2(Xxfs *px, Inode *pi, uint32_t vcnOff, uint32_t vcn, uint32_t *pLcns) noexcept(!kAlloc);
 
 private:
     uint32_t x_vcn = 0;
@@ -46,8 +56,11 @@ private:
 
 };
 
-extern template ShrPtr<void> FilePointer::X_Seek<false>(Xxfs *px, Inode *pi, uint32_t vcn) noexcept;
-extern template ShrPtr<void> FilePointer::X_Seek<true>(Xxfs *px, Inode *pi, uint32_t vcn);
+extern template class FilePointer<false>;
+extern template class FilePointer<true>;
+
+using FilePtrR = FilePointer<false>;
+using FilePtrW = FilePointer<true>;
 
 }
 

@@ -15,27 +15,29 @@ namespace xxfs {
 class Xxfs {
 private:
     friend class InodeCache;
-    friend class FilePointer;
+    friend FilePtrR;
+    friend FilePtrW;
     
 public:
     Xxfs(RaiiFile &&vRf, ShrPtr<MetaCluster> &&spcMeta);
 
 public:
     // returns inode number, increase cLookup when hit
-    uint32_t Lookup(struct stat &vStat, uint32_t linPar, const char *pszName);
+    uint32_t Lookup(FileStat &vStat, uint32_t linPar, const char *pszName);
     void Forget(uint32_t lin, uint64_t cLookup);
-    void GetAttr(struct stat &vStat, uint32_t lin);
-    ShrPtr<char []> ReadLink(uint32_t lin);
-    uint32_t MkDir(struct stat &vStat, uint32_t linPar, const char *pszName);
+    void GetAttr(FileStat &vStat, uint32_t lin);
+    void SetAttr(FileStat &vStat, FileStat *pStat, uint32_t lin, int nFlags, fuse_file_info *pInfo);
+    const char *ReadLink(uint32_t lin);
+    uint32_t MkDir(FileStat &vStat, uint32_t linPar, const char *pszName);
     void Unlink(uint32_t linPar, const char *pszName);
     void RmDir(uint32_t linPar, const char *pszName);
-    uint32_t SymLink(struct stat &vStat, const char *pszLink, uint32_t linPar, const char *pszName);
+    uint32_t SymLink(FileStat &vStat, const char *pszLink, uint32_t linPar, const char *pszName);
     void Rename(
         uint32_t linPar, const char *pszName,
-        uint32_t inoNewPar, const char *pszNewName,
+        uint32_t linNewPar, const char *pszNewName,
         unsigned uFlags
     );
-    void Link(struct stat &vStat, uint32_t lin, uint32_t inoNewPar, const char *pszNewName);
+    void Link(FileStat &vStat, uint32_t lin, uint32_t linNewPar, const char *pszNewName);
     OpenedFile *Open(uint32_t lin, fuse_file_info *pInfo);
     uint64_t Read(OpenedFile *pFile, std::unique_ptr<char []> &upBuf, uint64_t cbSize, uint64_t cbOff);
     uint64_t Write(OpenedFile *pFile, const void *pBuf, uint64_t cbSize, uint64_t cbOff);
@@ -45,30 +47,38 @@ public:
     size_t ReadDir(OpenedDir *pDir, fuse_req_t pReq, char *pBuf, size_t cbSize, off_t vOff);
     void ReleaseDir(OpenedDir *pDir) noexcept;
     void StatFs(VfsStat &vStat) const noexcept;
-    OpenedFile *Create(fuse_entry_param &vEntry, uint32_t linPar, const char *pszName);
+    std::pair<uint32_t, OpenedFile *> Create(FileStat &vStat, uint32_t linPar, const char *pszName);
 
-private:
-    //Inode *X_GetInode(uint32_t lin);
+public:
+    // get count of free cluster
+    uint32_t AvailClu();
 
 private:
     // allocate a free cluster and update meta cluster
-    uint32_t Y_AllocClu();
-    ShrPtr<InodeCluster> Y_MapInoClu(uint32_t vcn);
+    ShrPtr<InodeCluster> Y_MapInoClu(uint32_t vcn) noexcept;
     // invoked when both lookup count and link count are 0
     void Y_EraseIno(uint32_t lin, Inode *pi) noexcept;
     // noexcept, assume mmap does not fail
     template<class tObj>
-    ShrPtr<tObj> Y_Map(uint32_t lcn) noexcept;
+    inline ShrPtr<tObj> Y_Map(uint32_t lcn) noexcept {
+        return x_vCluCache.At<tObj>(lcn);
+    }
 
 private:
     // allocate a free cluster and update inode if lin is 0
     // invokes Y_AllocClu
-    void Y_FileAllocClu(Inode *pi, uint32_t &lin);
+    void Y_FileAllocClu(Inode *pi, uint32_t &lcn);
+    // only used in shrink
+    // check if each lcn is 0, do not double free
+    void Y_FileFreeClu(Inode *pi, uint32_t &lcn) noexcept;
+    void Y_FileFreeIdx1(Inode *pi, uint32_t &lcn, uint32_t vcnFrom = 0) noexcept;
+    void Y_FileFreeIdx2(Inode *pi, uint32_t &lcn, uint32_t vcnFrom = 0) noexcept;
+    void Y_FileFreeIdx3(Inode *pi, uint32_t &lcn, uint32_t vcnFrom = 0) noexcept;
     // invoked when fsync and close
     void Y_FileShrink(Inode *pi) noexcept;
 
 private:
-    static void X_FillStat(struct stat &vStat, uint32_t lin, Inode *pNod);
+    constexpr static void X_FillStat(FileStat &vStat, uint32_t lin, Inode *pNod) noexcept;
 
 private:
     RaiiFile x_vRf;

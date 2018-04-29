@@ -6,6 +6,93 @@
 namespace xxfs {
 
 template<bool kAlloc>
+ShrPtr<void> FilePointer<kAlloc>::X_Seek(Xxfs *px, Inode *pi, uint32_t vcn) noexcept(!kAlloc) {
+    if (x_bVld && vcn == x_vcn)
+        return x_sp;
+    if (vcn < kvcnIdx1) {
+        X_Seek0(px, pi, 0, vcn, pi->lcnIdx0);
+        return x_sp;
+    }
+    if (x_bVld1 && x_vcn1 <= vcn && vcn < x_vcn1 + kccIdx1) {
+        X_Seek0(px, pi, x_vcn1, vcn - x_vcn1, kAlloc || x_sp1 ? x_sp1->aLcns : nullptr);
+        return x_sp;
+    }
+    if (vcn < kvcnIdx2) {
+        X_Seek1(px, pi, kvcnIdx1, vcn - kvcnIdx1, &pi->lcnIdx1);
+        return x_sp;
+    }
+    if (x_bVld2 && x_vcn2 <= vcn && vcn < x_vcn2 + kccIdx2) {
+        X_Seek1(px, pi, x_vcn2, vcn - x_vcn2, kAlloc || x_sp2 ? x_sp2->aLcns : nullptr);
+        return x_sp;
+    }
+    if (vcn < kvcnIdx3) {
+        X_Seek2(px, pi, kvcnIdx2, vcn - kvcnIdx2, &pi->lcnIdx2);
+        return x_sp;
+    }
+    if (!x_bVld3) {
+        x_bVld3 = true;
+        if (kAlloc && !pi->lcnIdx3)
+            px->Y_FileAllocClu(pi, pi->lcnIdx3);
+        if (pi->lcnIdx3)
+            x_sp3 = px->Y_Map<IndexCluster>(pi->lcnIdx3);
+    }
+    X_Seek2(px, pi, kvcnIdx3, vcn - kvcnIdx3, kAlloc || x_sp3 ? x_sp3->aLcns : nullptr);
+    return x_sp;
+}
+
+template<bool kAlloc>
+void FilePointer<kAlloc>::X_Seek0(
+    Xxfs *px, Inode *pi, uint32_t vcnOff, uint32_t vcn, uint32_t *pLcns
+) noexcept(!kAlloc) {
+    x_bVld = true;
+    x_vcn = vcnOff + vcn;
+    x_sp.reset();
+    if (pLcns) {
+        if (kAlloc && !pLcns[vcn])
+            px->Y_FileAllocClu(pi, pLcns[vcn]);
+        if (pLcns[vcn])
+            x_sp = px->Y_Map<void>(pLcns[vcn]);
+    }
+}
+
+template<bool kAlloc>
+void FilePointer<kAlloc>::X_Seek1(
+    Xxfs *px, Inode *pi, uint32_t vcnOff, uint32_t vcn, uint32_t *pLcns
+) noexcept(!kAlloc) {
+    auto vcn1 = vcn % kccIdx1;
+    auto idx1 = vcn / kccIdx1;
+    x_bVld1 = true;
+    x_vcn1 = vcnOff + kccIdx1 * idx1;
+    x_sp1.reset();
+    if (pLcns) {
+        if (kAlloc && !pLcns[idx1])
+            px->Y_FileAllocClu(pi, pLcns[idx1]);
+        if (pLcns[idx1])
+            x_sp1 = px->Y_Map<IndexCluster>(pLcns[idx1]);
+    }
+    X_Seek0(px, pi, x_vcn1, vcn1, kAlloc || x_sp1 ? x_sp1->aLcns : nullptr);
+}
+
+template<bool kAlloc>
+void FilePointer<kAlloc>::X_Seek2(
+    Xxfs *px, Inode *pi, uint32_t vcnOff, uint32_t vcn, uint32_t *pLcns
+) noexcept(!kAlloc) {
+    auto vcn2 = vcn % kccIdx2;
+    auto idx2 = vcn / kccIdx2;
+    x_bVld2 = true;
+    x_vcn2 = vcnOff + kccIdx2 * idx2;
+    x_sp2.reset();
+    if (pLcns) {
+        if (kAlloc && !pLcns[idx2])
+            px->Y_FileAllocClu(pi, pLcns[idx2]);
+        if (pLcns[idx2])
+            x_sp2 = px->Y_Map<IndexCluster>(pLcns[idx2]);
+    }
+    X_Seek1(px, pi, x_vcn2, vcn2, kAlloc || x_sp2 ? x_sp2->aLcns : nullptr);
+}
+
+/*
+template<bool kAlloc>
 ShrPtr<void> FilePointer::X_Seek(Xxfs *px, Inode *pi, uint32_t vcn) noexcept(!kAlloc) {
     if (!x_bVld || vcn != x_vcn) {
         x_bVld = true;
@@ -84,9 +171,9 @@ ShrPtr<void> FilePointer::X_Seek(Xxfs *px, Inode *pi, uint32_t vcn) noexcept(!kA
         }
     }
     return x_sp;
-}
+}*/
 
-template ShrPtr<void> FilePointer::X_Seek<false>(Xxfs *px, Inode *pi, uint32_t vcn) noexcept;
-template ShrPtr<void> FilePointer::X_Seek<true>(Xxfs *px, Inode *pi, uint32_t vcn);
+template class FilePointer<false>;
+template class FilePointer<true>;
 
 }
