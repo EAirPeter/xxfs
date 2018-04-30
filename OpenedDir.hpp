@@ -7,6 +7,13 @@
 
 namespace xxfs {
 
+enum class DirPolicy {
+    kAny,
+    kDir,
+    kNotDir,
+    kNone,
+};
+
 class OpenedDir : public OpenedFile {
 public:
     constexpr static auto kItBegin = off_t {0};
@@ -18,7 +25,7 @@ public:
     // care the case empty dir
     // requires pszName not empty
     // returns inode number
-    uint32_t Lookup(const char *pszName, uint16_t &uMode);
+    std::pair<uint32_t, uint16_t> Lookup(const char *pszName, DirPolicy vPolicy);
 
     // for readdir
     off_t IterSeek(off_t vOff);
@@ -29,13 +36,13 @@ public:
     // requires pszName not empty
     // returns the previous inode number, 0 for not exist before
     // does not overrite directory
-    uint32_t Insert(const char *pszName, uint32_t lin, uint16_t &uMode, uint16_t uReplaceMode = 0);
+    std::pair<uint32_t, uint16_t> Insert(const char *pszName, uint32_t lin, uint16_t uMode, DirPolicy vPolicy);
 
     // free an entry in the directory
     // does not check if the directory requeseted to delete is empty (bDir = true)
     // requires pszName not empty
     // returns the inode number
-    uint32_t Remove(const char *pszName, uint16_t &uMode);
+    std::pair<uint32_t, uint16_t> Remove(const char *pszName, DirPolicy vPolicy);
 
     // re-organize the structure if the count of used entry * 2 is less than the total count
     // required to call Xxfs::Y_FileShrink after destruction closely

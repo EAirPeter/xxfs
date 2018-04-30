@@ -224,8 +224,9 @@ enum class MetaResult {
     kPartial,   // the size is not dividable by 4 KiB
 };
 
-MetaResult FillMeta(MetaCluster *pcMeta, size_t cbSize);
 void CheckPageSize();
+MetaResult FillMeta(MetaCluster *pcMeta, size_t cbSize);
+void FillStat(FileStat &vStat, uint32_t lin, Inode *pi) noexcept;
 
 }
 

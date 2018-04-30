@@ -51,7 +51,7 @@ public:
 
 public:
     // get count of free cluster
-    uint32_t AvailClu();
+    uint32_t AvailClu() const noexcept;
 
 private:
     // allocate a free cluster and update meta cluster

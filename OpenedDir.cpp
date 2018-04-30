@@ -5,7 +5,7 @@
 
 namespace xxfs {
 
-uint32_t OpenedDir::Lookup(const char *pszName, uint16_t &uMode) {
+std::pair<uint32_t, uint16_t> OpenedDir::Lookup(const char *pszName, DirPolicy vPolicy) {
     if (!pi->ccSize)
         throw Exception {ENOENT};
     auto pe = X_GetEnt(0);
@@ -26,10 +26,21 @@ uint32_t OpenedDir::Lookup(const char *pszName, uint16_t &uMode) {
     }
     if (!pe->bExist)
         throw Exception {ENOENT};
-    if (pe->uMode & S_IFMT & ~uMode)
-        throw Exception {uMode & S_IFDIR ? ENOTDIR : EISDIR};
-    uMode = pe->uMode;
-    return pe->linFile;
+    switch (vPolicy) {
+    case DirPolicy::kAny:
+        break;
+    case DirPolicy::kDir:
+        if (!S_ISDIR(pe->uMode))
+            throw Exception {ENOTDIR};
+        break;
+    case DirPolicy::kNotDir:
+        if (S_ISDIR(pe->uMode))
+            throw Exception {EISDIR};
+        break;
+    case DirPolicy::kNone:
+        throw Exception {EINVAL};
+    }
+    return {pe->linFile, pe->uMode};
 }
 
 // begin (denoted by off_t {0}): the first entry with bExist == true
@@ -107,7 +118,7 @@ off_t OpenedDir::IterNext() noexcept {
     return kItEnd;
 }
 
-uint32_t OpenedDir::Insert(const char *pszName, uint32_t lin, uint16_t &uMode, uint16_t uReplaceMode) {
+std::pair<uint32_t, uint16_t> OpenedDir::Insert(const char *pszName, uint32_t lin, uint16_t uMode, DirPolicy vPolicy) {
     X_PrepareRoot();
     auto pe = X_GetEnt(0);
     auto ceNeed = (uint32_t) strlen(pszName);
@@ -137,17 +148,30 @@ uint32_t OpenedDir::Insert(const char *pszName, uint32_t lin, uint16_t &uMode, u
         ++pszName;
     }
     if (pe->bExist) {
-        if (pe->uMode & S_IFMT & ~uReplaceMode)
-            throw Exception {uReplaceMode & ~S_IFDIR ? EISDIR : EEXIST};
+        switch (vPolicy) {
+        case DirPolicy::kAny:
+            break;
+        case DirPolicy::kDir:
+            if (!S_ISDIR(pe->uMode))
+                throw Exception {ENOTDIR};
+            break;
+        case DirPolicy::kNotDir:
+            if (S_ISDIR(pe->uMode))
+                throw Exception {EISDIR};
+            break;
+        case DirPolicy::kNone:
+            throw Exception {EEXIST};
+        }
         auto linOld = pe->linFile;
+        auto uModeOld = pe->uMode;
         pe->linFile = lin;
-        std::swap(pe->uMode, uMode);
-        return linOld;
+        pe->uMode = uMode;
+        return {linOld, uModeOld};
     }
     pe->linFile = lin;
     pe->uMode = uMode;
     pe->bExist = true;
-    return 0;
+    return {0, 0};
 }
 
 namespace {
@@ -181,7 +205,7 @@ private:
 
 }
 
-uint32_t OpenedDir::Remove(const char *pszName, uint16_t &uMode) {
+std::pair<uint32_t, uint16_t> OpenedDir::Remove(const char *pszName, DirPolicy vPolicy) {
     if (!pi->ccSize)
         throw Exception {ENOENT};
     MappedStack vStk;
@@ -204,10 +228,22 @@ uint32_t OpenedDir::Remove(const char *pszName, uint16_t &uMode) {
     }
     if (!pe->bExist)
         throw Exception {ENOENT};
-    if (pe->uMode & S_IFMT & ~uMode)
-        throw Exception {uMode & S_IFDIR ? ENOTDIR : EISDIR};
+    switch (vPolicy) {
+    case DirPolicy::kAny:
+        break;
+    case DirPolicy::kDir:
+        if (!S_ISDIR(pe->uMode))
+            throw Exception {ENOTDIR};
+        break;
+    case DirPolicy::kNotDir:
+        if (S_ISDIR(pe->uMode))
+            throw Exception {EISDIR};
+        break;
+    case DirPolicy::kNone:
+        throw Exception {EINVAL};
+    }
     auto lin = pe->linFile;
-    uMode = pe->uMode;
+    auto uMode = pe->uMode;
     pe->bExist = false;
     while (!vStk.IsEmpty()) {
         auto *pLcn = vStk.Top();
@@ -219,7 +255,7 @@ uint32_t OpenedDir::Remove(const char *pszName, uint16_t &uMode) {
         X_Free(*pLcn);
         *pLcn = lenNext;
     }
-    return lin;
+    return {lin, uMode};
 }
 
 void OpenedDir::Shrink(bool bForce) noexcept {

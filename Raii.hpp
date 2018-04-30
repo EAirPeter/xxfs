@@ -18,7 +18,7 @@ inline ShrPtr<tObj> ShrMap(int fd, uint32_t lcn) {
         MAP_SHARED, fd, (off_t) kcbCluSize * lcn
     );
     if (pVoid == MAP_FAILED)
-        RAISE("Failed to invoke mmap()");
+        RAISE("Failed to invoke mmap()", errno);
     return ShrPtr<tObj>(reinterpret_cast<tObj *>(pVoid), UnmapDeleter {});
 }
 

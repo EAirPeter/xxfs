@@ -12,13 +12,18 @@ RM := rm -f
 OBJ := Common.o
 XXFSOBJ := BitmapAllocator.o FilePointer.o InodeCache.o OpenedDir.o OpenedFile.o Xxfs.o XxfsMain.o
 MKXXFSOBJ := MkXxfsMain.o
+CLUXXOBJ := CluXxMain.o
+ALL := xxfs mkxxfs cluxx
 
-all: xxfs mkxxfs
+all: $(ALL)
 
 xxfs: $(XXFSOBJ) $(OBJ)
 	$(CXX) $(LIBS) -o $@ $^
 
 mkxxfs: $(MKXXFSOBJ) $(OBJ)
+	$(CXX) $(LIBS) -o $@ $^
+
+cluxx: $(CLUXXOBJ) $(OBJ)
 	$(CXX) $(LIBS) -o $@ $^
 
 %.o: %.cpp
@@ -27,6 +32,4 @@ mkxxfs: $(MKXXFSOBJ) $(OBJ)
 .PHONY: clean
 
 clean:
-	$(RM) $(OBJ) $(XXFSOBJ) $(MKXXFSOBJ)
-	$(RM) xxfs
-	$(RM) mkXxfs
+	$(RM) $(ALL) $(OBJ) $(XXFSOBJ) $(MKXXFSOBJ) $(CLUXXOBJ)

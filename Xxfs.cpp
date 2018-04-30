@@ -23,10 +23,10 @@ uint32_t Xxfs::Lookup(FileStat &vStat, uint32_t linPar, const char *pszName) {
         throw Exception {ENAMETOOLONG};
     auto piPar = x_vInoCache.At(linPar);
     OpenedDir vParDir(this, piPar);
-    uint16_t uMode = S_IFDIR | S_IFLNK | S_IFREG;
-    auto lin = vParDir.Lookup(pszName, uMode);
+    auto [lin, uMode] = vParDir.Lookup(pszName, DirPolicy::kAny);
+    (void) uMode;
     auto pi = x_vInoCache.IncLookup(linPar);
-    X_FillStat(vStat, lin, pi);
+    FillStat(vStat, lin, pi);
     return lin;
 }
 
@@ -36,7 +36,7 @@ void Xxfs::Forget(uint32_t lin, uint64_t cLookup) {
 
 void Xxfs::GetAttr(FileStat &vStat, uint32_t lin) {
     auto pi = x_vInoCache.At(lin);
-    X_FillStat(vStat, lin, pi);
+    FillStat(vStat, lin, pi);
 }
 
 void Xxfs::SetAttr(FileStat &vStat, FileStat *pStat, uint32_t lin, int nFlags, fuse_file_info *pInfo) {
@@ -50,7 +50,7 @@ void Xxfs::SetAttr(FileStat &vStat, FileStat *pStat, uint32_t lin, int nFlags, f
         if (!pInfo)
             Y_FileShrink(pi);
     }
-    X_FillStat(vStat, lin, pi);
+    FillStat(vStat, lin, pi);
 }
 
 const char *Xxfs::ReadLink(uint32_t lin) {
@@ -70,19 +70,18 @@ uint32_t Xxfs::MkDir(FileStat &vStat, uint32_t linPar, const char *pszName) {
     auto lin = x_vInoAlloc.Alloc();
     auto pi = x_vInoCache.IncLookup(lin);
     memset(pi, 0, sizeof(Inode));
-    uint16_t uMode = S_IFDIR | 0777;
-    pi->uMode = uMode;
+    pi->uMode = S_IFDIR | 0777;
     pi->cLink = 1;
     try {
         try {
             OpenedDir vDir(this, piPar);
-            vDir.Insert(pszName, lin, uMode);
+            vDir.Insert(pszName, lin, pi->uMode, DirPolicy::kNone);
         }
         catch (...) {
             x_vInoCache.DecLookup(lin);
             throw;
         }
-        X_FillStat(vStat, lin, pi);
+        FillStat(vStat, lin, pi);
         return lin;
     }
     catch (...) {
@@ -98,8 +97,8 @@ void Xxfs::Unlink(uint32_t linPar, const char *pszName) {
         throw Exception {ENOTDIR};
     {
         OpenedDir vDir(this, piPar);
-        uint16_t uMode = S_IFLNK | S_IFREG;
-        auto lin = vDir.Remove(pszName, uMode);
+        auto [lin, uMode] = vDir.Remove(pszName, DirPolicy::kNotDir);
+        (void) uMode;
         auto pi = x_vInoCache.IncLookup(lin);
         --pi->cLink;
         x_vInoCache.DecLookup(lin);
@@ -116,15 +115,15 @@ void Xxfs::RmDir(uint32_t linPar, const char *pszName) {
         throw Exception {ENOTDIR};
     {
         OpenedDir vDir(this, piPar);
-        uint16_t uMode = S_IFDIR;
-        auto lin = vDir.Lookup(pszName, uMode);
+        auto [lin, uMode] = vDir.Lookup(pszName, DirPolicy::kDir);
+        (void) uMode;
         auto pi = x_vInoCache.IncLookup(lin);
         if (pi->ccSize) {
             auto spc = Y_Map<DirCluster>(pi->lcnIdx0[0]);
             if (spc->aEnts[0].linFile != 1)
                 throw Exception {ENOTEMPTY};
         }
-        vDir.Remove(pszName, uMode);
+        vDir.Remove(pszName, DirPolicy::kDir);
         --pi->cLink;
         x_vInoCache.DecLookup(lin);
         vDir.Shrink();
@@ -144,23 +143,22 @@ uint32_t Xxfs::SymLink(FileStat &vStat, const char *pszLink, uint32_t linPar, co
     auto lin = x_vInoAlloc.Alloc();
     auto pi = x_vInoCache.IncLookup(lin);
     memset(pi, 0, sizeof(Inode));
-    uint16_t uMode = S_IFLNK | 0777;
-    pi->uMode = uMode;
+    pi->uMode = S_IFLNK | 0777;
     pi->cLink = 1;
     try {
         {
-            OpenedFile vFile(this, pi, false, false, false);
+            OpenedFile vFile(this, pi, true, false, false);
             vFile.DoWrite(pszLink, (uint64_t) cbLength + 1, 0);
         }
         try {
             OpenedDir vDir(this, piPar);
-            vDir.Insert(pszName, lin, uMode);
+            vDir.Insert(pszName, lin, pi->uMode, DirPolicy::kNone);
         }
         catch (...) {
             x_vInoCache.DecLookup(lin);
             throw;
         }
-        X_FillStat(vStat, lin, pi);
+        FillStat(vStat, lin, pi);
         return lin;
     }
     catch (...) {
@@ -187,33 +185,32 @@ void Xxfs::Rename(
     {
         OpenedDir vDir(this, piPar);
         OpenedDir vNewDir(this, piNewPar);
-        uint16_t uReplaceMode = 0;
-        uint16_t uMode = S_IFDIR | S_IFLNK | S_IFREG;
         switch (uFlags) {
-        case 0:
-            uReplaceMode = S_IFLNK | S_IFREG;
-            [[fallthrough]];
-        case RENAME_NOREPLACE: {
-            auto lin = vDir.Lookup(pszName, uMode);
-            auto uOthMode = uMode;
-            auto linOth = vNewDir.Insert(pszNewName, lin, uOthMode, uReplaceMode);
+        case 0: {
+            auto [lin, uMode] = vDir.Lookup(pszName, DirPolicy::kAny);
+            auto [linOth, uOthMode] = vNewDir.Insert(pszNewName, lin, uMode, DirPolicy::kNotDir);
+            (void) uOthMode;
             if (linOth) {
                 auto piOth = x_vInoCache.IncLookup(linOth);
                 --piOth->cLink;
                 x_vInoCache.DecLookup(linOth);
             }
-            vDir.Remove(pszName, uMode);
+            vDir.Remove(pszName, DirPolicy::kAny);
+            break;
+        }
+        case RENAME_NOREPLACE: {
+            auto [lin, uMode] = vDir.Lookup(pszName, DirPolicy::kAny);
+            vNewDir.Insert(pszNewName, lin, uMode, DirPolicy::kNone);
+            vDir.Remove(pszName, DirPolicy::kAny);
             break;
         }
         case RENAME_EXCHANGE: {
-            uReplaceMode = S_IFDIR | S_IFLNK | S_IFREG;
-            auto lin = vDir.Lookup(pszName, uMode);
-            auto uOthMode = uMode;
-            auto linOth = vNewDir.Insert(pszNewName, lin, uOthMode, uReplaceMode);
+            auto [lin, uMode] = vDir.Lookup(pszName, DirPolicy::kAny);
+            auto [linOth, uOthMode] = vNewDir.Insert(pszNewName, lin, uMode, DirPolicy::kAny);
             if (linOth)
-                vDir.Insert(pszName, lin, uOthMode, uReplaceMode);
+                vDir.Insert(pszName, lin, uOthMode, DirPolicy::kAny);
             else
-                vDir.Remove(pszName, uMode);
+                vDir.Remove(pszName, DirPolicy::kAny);
             break;
         }
         default:
@@ -235,12 +232,11 @@ void Xxfs::Link(FileStat &vStat, uint32_t lin, uint32_t linNewPar, const char *p
     auto piNewPar = x_vInoCache.At(linNewPar);
     if (!piNewPar->IsDir())
         throw Exception {ENOTDIR};
-    auto uMode = pi->uMode;
     OpenedDir vDir(this, piNewPar);
-    vDir.Insert(pszNewName, lin, uMode);
+    vDir.Insert(pszNewName, lin, pi->uMode, DirPolicy::kNone);
     x_vInoCache.IncLookup(lin);
     ++pi->cLink;
-    X_FillStat(vStat, lin, pi);
+    FillStat(vStat, lin, pi);
 }
 
 OpenedFile *Xxfs::Open(uint32_t lin, fuse_file_info *pInfo) {
@@ -352,6 +348,40 @@ void Xxfs::StatFs(VfsStat &vStat) const noexcept {
     vStat.f_namemax = (unsigned long) (kcePerClu - 1);
 }
 
+std::pair<uint32_t, OpenedFile *> Xxfs::Create(FileStat &vStat, uint32_t linPar, const char *pszName) {
+    if (strlen(pszName) >= kcePerClu)
+        throw Exception {ENAMETOOLONG};
+    auto piPar = x_vInoCache.At(linPar);
+    if (!piPar->IsDir())
+        throw Exception {ENOTDIR};
+    auto lin = x_vInoAlloc.Alloc();
+    auto pi = x_vInoCache.IncLookup(lin);
+    memset(pi, 0, sizeof(Inode));
+    pi->uMode = S_IFREG | 0777;
+    pi->cLink = 1;
+    try {
+        try {
+            OpenedDir vDir(this, piPar);
+            vDir.Insert(pszName, lin, pi->uMode, DirPolicy::kNone);
+        }
+        catch (...) {
+            x_vInoCache.DecLookup(lin);
+            throw;
+        }
+        FillStat(vStat, lin, pi);
+        return {lin, new OpenedFile(this, pi, true, false, false)};
+    }
+    catch (...) {
+        Y_EraseIno(lin, pi);
+        throw;
+    }
+}
+
+
+uint32_t Xxfs::AvailClu() const noexcept {
+    return x_spcMeta->ccTotal - x_spcMeta->ccUsed;
+}
+
 ShrPtr<InodeCluster> Xxfs::Y_MapInoClu(uint32_t vcn) noexcept {
     return x_vCluCache.At<InodeCluster>(x_spcMeta->lcnIno + vcn);
 }
@@ -441,119 +471,6 @@ void Xxfs::Y_FileShrink(Inode *pi) noexcept {
     else {
         Y_FileFreeIdx3(pi, pi->lcnIdx3);
     }
-}
-
-/*
-template<bool kAddRef>
-Inode *Xxfs::X_GetInode(uint32_t lin) {
-    if (lin >= x_spcMeta->ciTotal)
-        throw Exception {ENOENT};
-    auto idxNodInBlk = lin % kciPerClu;
-    auto lcn = lin / kciPerClu;
-    auto it = x_mapNodBlks.find(lcn);
-    if (it == x_mapNodBlks.end()) {
-        if constexpr (!kAddRef)
-            throw Exception {ENOENT};
-        auto &&res = x_mapNodBlks.emplace(
-            std::piecewise_construct,
-            std::forward_as_tuple(lcn),
-            std::forward_as_tuple(X_Map<InodeBlock>(x_spcMeta->bnoNod + lcn))
-        );
-        it = res.first;
-    }
-    if constexpr (kAddRef) {
-        ++it->second.cBlkLookup;
-        ++it->second.cNodLookup[idxNodInBlk];
-    }
-    return &it->second.mpBlk->aNods[idxNodInBlk];
-}
-
-template<class tClu>
-uint32_t Xxfs::X_AllocFor(Inode *pi, ShrPtr<tClu> &mpBlk) {
-    auto bno = x_vCluAlloc.Alloc();
-    ++pi->ccTotal;
-    mpBlk = X_Map<tClu>(bno);
-    memset(mpBlk.Get(), 0, kcbCluSize);
-    return bno;
-}
-
-template<class tClu, bool kAlloc>
-uint32_t Xxfs::X_Seek(Inode *pi, ShrPtr<tClu> &mpBlk, uint32_t vcn) {
-    mpBlk.Release();
-    uint32_t *pBnoIdx0 = nullptr;
-    uint32_t *pBnoIdx1 = nullptr;
-    uint32_t *pBnoIdx2 = nullptr;
-    ShrPtr<IndexBlock> mpIdx1, mpIdx2, mpIdx3;
-    if (vcn >= kcOffIdx3Blk) {
-        vcn -= kcOffIdx3Blk;
-        auto &bnoIdx3 = pi->bnoIdx3;
-        if (bnoIdx3)
-            mpIdx3 = X_Map<IndexBlock>(bnoIdx3);
-        else if constexpr (kAlloc)
-            bnoIdx3 = X_AllocFor<IndexBlock>(pi, mpIdx3);
-        else
-            return 0;
-        pBnoIdx2 = &mpIdx3->aBnos[vcn / kcIdx2Blk];
-        vcn %= kcIdx2Blk;
-    }
-    if (vcn >= kcOffIdx2Blk || pBnoIdx2) {
-        if (!pBnoIdx2) {
-            vcn -= kcOffIdx2Blk;
-            pBnoIdx2 = &pi->bnoIdx2;
-        }
-        auto &bnoIdx2 = *pBnoIdx2;
-        if (bnoIdx2)
-            mpIdx2 = X_Map<IndexBlock>(bnoIdx2);
-        else if constexpr (kAlloc)
-            bnoIdx2 = X_AllocFor<IndexBlock>(pi, mpIdx2);
-        else
-            return 0;
-        pBnoIdx1 = &mpIdx3->aBnos[vcn / kcIdx1Blk];
-        vcn %= kcIdx1Blk;
-    }
-    if (vcn >= kcOffIdx1Blk || pBnoIdx1) {
-        if (!pBnoIdx1) {
-            vcn -= kcOffIdx1Blk;
-            pBnoIdx1 = &pi->bnoIdx1;
-        }
-        auto &bnoIdx1 = *pBnoIdx1;
-        if (bnoIdx1)
-            mpIdx1 = X_Map<IndexBlock>(bnoIdx1);
-        else if constexpr (kAlloc)
-            bnoIdx1 = X_AllocFor<IndexBlock>(pi, mpIdx1);
-        else
-            return 0;
-        pBnoIdx0 = &mpIdx3->aBnos[vcn];
-    }
-    if (!pBnoIdx0)
-        pBnoIdx0 = &pi->lcnIdx0[vcn];
-    auto &lcnIdx0 = *pBnoIdx0;
-    if (lcnIdx0)
-        mpBlk = X_Map<tClu>(lcnIdx0);
-    else if constexpr (kAlloc)
-        lcnIdx0 = X_AllocFor<tClu>(pi, mpBlk);
-    return lcnIdx0;
-}
-
-template<class tClu>
-inline ShrPtr<tClu> Xxfs::X_Map(uint32_t lcn) {
-    return x_vCluCache.At<tClu>(lcn);
-}
-*/
-constexpr void Xxfs::X_FillStat(FileStat &vStat, uint32_t lin, Inode *pi) noexcept {
-    vStat.st_dev = (dev_t) 0;
-    vStat.st_ino = (ino_t) lin;
-    vStat.st_mode = (mode_t) pi->uMode;
-    vStat.st_nlink = (nlink_t) pi->cLink;
-    vStat.st_uid = (uid_t) 0;
-    vStat.st_gid = (gid_t) 0;
-    vStat.st_rdev = 0;
-    vStat.st_size = (off_t) pi->cbSize;
-    vStat.st_blksize = (blksize_t) kcbCluSize;
-    vStat.st_blocks = (blkcnt_t) pi->ccSize;
-    vStat.st_atim = {};
-    vStat.st_mtim = {};
-    vStat.st_ctim = {};
 }
 
 }

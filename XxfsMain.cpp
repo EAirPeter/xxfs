@@ -3,9 +3,9 @@
 #include "Raii.hpp"
 #include "Xxfs.hpp"
 
-namespace xxfs {
+namespace xxfs { namespace {
 
-namespace {
+bool f_bVerbose = false;
 
 inline Xxfs *GetXxfs(fuse_req_t pReq) {
     return (Xxfs *) fuse_req_userdata(pReq);
@@ -20,6 +20,8 @@ constexpr fuse_ino_t GetFino(uint32_t ino) {
 }
 
 void XxfsLookup(fuse_req_t pReq, fuse_ino_t inoPar, const char *pszName) {
+    if (f_bVerbose)
+        printf("lookup: inoPar = %" PRIu32 ", pszName = %s\n", GetLin(inoPar), pszName);
     try {
         auto px = GetXxfs(pReq);
         fuse_entry_param vEntry {};
@@ -29,7 +31,7 @@ void XxfsLookup(fuse_req_t pReq, fuse_ino_t inoPar, const char *pszName) {
         fuse_reply_entry(pReq, &vEntry);
     }
     catch (Exception &e) {
-        fprintf(stderr, "lookup: %d\n", e.nErrno);
+        fprintf(stderr, "lookup: [%d] %s\n", e.nErrno, strerror(e.nErrno));
         fuse_reply_err(pReq, e.nErrno);
     }
     catch (FatalException &e) {
@@ -39,13 +41,15 @@ void XxfsLookup(fuse_req_t pReq, fuse_ino_t inoPar, const char *pszName) {
 }
 
 void XxfsForget(fuse_req_t pReq, fuse_ino_t ino, uint64_t cLookup) {
+    if (f_bVerbose)
+        printf("forget: ino = %" PRIu32 ", cLookup = %" PRIu64 "\n", GetLin(ino), cLookup);
     try {
         auto px = GetXxfs(pReq);
         px->Forget(GetLin(ino), cLookup);
         fuse_reply_none(pReq);
     }
     catch (Exception &e) {
-        fprintf(stderr, "forget: %d\n", e.nErrno);
+        fprintf(stderr, "forget: [%d] %s\n", e.nErrno, strerror(e.nErrno));
         fuse_reply_none(pReq);
     }
     catch (FatalException &e) {
@@ -55,6 +59,8 @@ void XxfsForget(fuse_req_t pReq, fuse_ino_t ino, uint64_t cLookup) {
 }
 
 void XxfsGetAttr(fuse_req_t pReq, fuse_ino_t ino, fuse_file_info *) {
+    if (f_bVerbose)
+        printf("getattr: ino = %" PRIu32 "\n", GetLin(ino));
     try {
         auto px = GetXxfs(pReq);
         FileStat vStat {};
@@ -62,7 +68,7 @@ void XxfsGetAttr(fuse_req_t pReq, fuse_ino_t ino, fuse_file_info *) {
         fuse_reply_attr(pReq, &vStat, std::numeric_limits<double>::infinity());
     }
     catch (Exception &e) {
-        fprintf(stderr, "getattr: %d\n", e.nErrno);
+        fprintf(stderr, "getattr: [%d] %s\n", e.nErrno, strerror(e.nErrno));
         fuse_reply_err(pReq, e.nErrno);
     }
     catch (FatalException &e) {
@@ -72,6 +78,8 @@ void XxfsGetAttr(fuse_req_t pReq, fuse_ino_t ino, fuse_file_info *) {
 }
 
 void XxfsSetAttr(fuse_req_t pReq, fuse_ino_t ino, FileStat *pStat, int nFlags, fuse_file_info *pInfo) {
+    if (f_bVerbose)
+        printf("setattr: ino = %" PRIu32 "\n", GetLin(ino));
     // ignore   FUSE_SET_ATTR_MODE
     // ignore   FUSE_SET_ATTR_UID
     // ignore   FUSE_SET_ATTR_GID
@@ -88,7 +96,7 @@ void XxfsSetAttr(fuse_req_t pReq, fuse_ino_t ino, FileStat *pStat, int nFlags, f
         fuse_reply_attr(pReq, &vStat, std::numeric_limits<double>::infinity());
     }
     catch (Exception &e) {
-        fprintf(stderr, "setattr: %d\n", e.nErrno);
+        fprintf(stderr, "setattr: [%d] %s\n", e.nErrno, strerror(e.nErrno));
         fuse_reply_err(pReq, e.nErrno);
     }
     catch (FatalException &e) {
@@ -98,13 +106,15 @@ void XxfsSetAttr(fuse_req_t pReq, fuse_ino_t ino, FileStat *pStat, int nFlags, f
 }
 
 void XxfsReadLink(fuse_req_t pReq, fuse_ino_t ino) {
+    if (f_bVerbose)
+        printf("readlink: ino = %" PRIu32 "\n", GetLin(ino));
     try {
         auto px = GetXxfs(pReq);
         auto pszLink = px->ReadLink(GetLin(ino));
         fuse_reply_readlink(pReq, pszLink);
     }
     catch (Exception &e) {
-        fprintf(stderr, "readlink: %d\n", e.nErrno);
+        fprintf(stderr, "readlink: [%d] %s\n", e.nErrno, strerror(e.nErrno));
         fuse_reply_err(pReq, e.nErrno);
     }
     catch (FatalException &e) {
@@ -114,6 +124,8 @@ void XxfsReadLink(fuse_req_t pReq, fuse_ino_t ino) {
 }
 
 void XxfsMkDir(fuse_req_t pReq, fuse_ino_t inoPar, const char *pszName, mode_t) {
+    if (f_bVerbose)
+        printf("mkdir: inoPar = %" PRIu32 ", pszName = %s\n", GetLin(inoPar), pszName);
     // mode is ignored
     try {
         auto px = GetXxfs(pReq);
@@ -124,7 +136,7 @@ void XxfsMkDir(fuse_req_t pReq, fuse_ino_t inoPar, const char *pszName, mode_t) 
         fuse_reply_entry(pReq, &vEntry);
     }
     catch (Exception &e) {
-        fprintf(stderr, "mkdir: %d\n", e.nErrno);
+        fprintf(stderr, "mkdir: [%d] %s\n", e.nErrno, strerror(e.nErrno));
         fuse_reply_err(pReq, e.nErrno);
     }
     catch (FatalException &e) {
@@ -134,13 +146,15 @@ void XxfsMkDir(fuse_req_t pReq, fuse_ino_t inoPar, const char *pszName, mode_t) 
 }
 
 void XxfsUnlink(fuse_req_t pReq, fuse_ino_t inoPar, const char *pszName) {
+    if (f_bVerbose)
+        printf("unlink: inoPar = %" PRIu32 ", pszName = %s\n", GetLin(inoPar), pszName);
     try {
         auto px = GetXxfs(pReq);
         px->Unlink(GetLin(inoPar), pszName);
         fuse_reply_err(pReq, 0);
     }
     catch (Exception &e) {
-        fprintf(stderr, "unlink: %d\n", e.nErrno);
+        fprintf(stderr, "unlink: [%d] %s\n", e.nErrno, strerror(e.nErrno));
         fuse_reply_err(pReq, e.nErrno);
     }
     catch (FatalException &e) {
@@ -150,13 +164,15 @@ void XxfsUnlink(fuse_req_t pReq, fuse_ino_t inoPar, const char *pszName) {
 }
 
 void XxfsRmDir(fuse_req_t pReq, fuse_ino_t inoPar, const char *pszName) {
+    if (f_bVerbose)
+        printf("rmdir: inoPar = %" PRIu32 ", pszName = %s\n", GetLin(inoPar), pszName);
     try {
         auto px = GetXxfs(pReq);
         px->RmDir(GetLin(inoPar), pszName);
         fuse_reply_err(pReq, 0);
     }
     catch (Exception &e) {
-        fprintf(stderr, "rmdir: %d\n", e.nErrno);
+        fprintf(stderr, "rmdir: [%d] %s\n", e.nErrno, strerror(e.nErrno));
         fuse_reply_err(pReq, e.nErrno);
     }
     catch (FatalException &e) {
@@ -166,6 +182,8 @@ void XxfsRmDir(fuse_req_t pReq, fuse_ino_t inoPar, const char *pszName) {
 }
 
 void XxfsSymLink(fuse_req_t pReq, const char *pszLink, fuse_ino_t inoPar, const char *pszName) {
+    if (f_bVerbose)
+        printf("symlink: pszLink = %s, inoPar = %" PRIu32 ", pszName = %s\n", pszLink, GetLin(inoPar), pszName);
     try {
         auto px = GetXxfs(pReq);
         fuse_entry_param vEntry {};
@@ -175,7 +193,7 @@ void XxfsSymLink(fuse_req_t pReq, const char *pszLink, fuse_ino_t inoPar, const 
         fuse_reply_entry(pReq, &vEntry);
     }
     catch (Exception &e) {
-        fprintf(stderr, "symlink: %d\n", e.nErrno);
+        fprintf(stderr, "symlink: [%d] %s\n", e.nErrno, strerror(e.nErrno));
         fuse_reply_err(pReq, e.nErrno);
     }
     catch (FatalException &e) {
@@ -190,13 +208,18 @@ void XxfsRename(
     fuse_ino_t inoNewPar, const char *pszNewName,
     unsigned uFlags
 ) {
+    if (f_bVerbose) {
+        printf("rename: inoPar = %" PRIu32 ", pszName = %s\n", GetLin(inoPar), pszName);
+        printf("        inoNewPar = %" PRIu32 ", pszNewName = %s\n", GetLin(inoNewPar), pszNewName);
+        printf("        uFlags = %u\n", uFlags);
+    }
     try {
         auto px = GetXxfs(pReq);
         px->Rename(GetLin(inoPar), pszName, GetLin(inoNewPar), pszNewName, uFlags);
         fuse_reply_err(pReq, 0);
     }
     catch (Exception &e) {
-        fprintf(stderr, "rename: %d\n", e.nErrno);
+        fprintf(stderr, "rename: [%d] %s\n", e.nErrno, strerror(e.nErrno));
         fuse_reply_err(pReq, e.nErrno);
     }
     catch (FatalException &e) {
@@ -206,6 +229,10 @@ void XxfsRename(
 }
 
 void XxfsLink(fuse_req_t pReq, fuse_ino_t ino, fuse_ino_t inoNewPar, const char *pszNewName) {
+    if (f_bVerbose) {
+        printf("link: ino = %" PRIu32 ", inoNewPar = %" PRIu32 "\n", GetLin(ino), GetLin(inoNewPar));
+        printf("      pszNewName = %s\n", pszNewName);
+    }
     try {
         auto px = GetXxfs(pReq);
         fuse_entry_param vEntry {};
@@ -216,7 +243,7 @@ void XxfsLink(fuse_req_t pReq, fuse_ino_t ino, fuse_ino_t inoNewPar, const char 
         fuse_reply_entry(pReq, &vEntry);
     }
     catch (Exception &e) {
-        fprintf(stderr, "link: %d\n", e.nErrno);
+        fprintf(stderr, "link: [%d] %s\n", e.nErrno, strerror(e.nErrno));
         fuse_reply_err(pReq, e.nErrno);
     }
     catch (FatalException &e) {
@@ -226,13 +253,15 @@ void XxfsLink(fuse_req_t pReq, fuse_ino_t ino, fuse_ino_t inoNewPar, const char 
 }
 
 void XxfsOpen(fuse_req_t pReq, fuse_ino_t ino, fuse_file_info *pInfo) {
+    if (f_bVerbose)
+        printf("open: ino = %" PRIu32 "\n", GetLin(ino));
     try {
         auto px = GetXxfs(pReq);
         pInfo->fh = (uint64_t) (uintptr_t) px->Open(GetLin(ino), pInfo);
         fuse_reply_open(pReq, pInfo);
     }
     catch (Exception &e) {
-        fprintf(stderr, "open: %d\n", e.nErrno);
+        fprintf(stderr, "open: [%d] %s\n", e.nErrno, strerror(e.nErrno));
         fuse_reply_err(pReq, e.nErrno);
     }
     catch (FatalException &e) {
@@ -241,7 +270,9 @@ void XxfsOpen(fuse_req_t pReq, fuse_ino_t ino, fuse_file_info *pInfo) {
     }
 }
 
-void XxfsRead(fuse_req_t pReq, fuse_ino_t, size_t cbSize, off_t cbOff, fuse_file_info *pInfo) {
+void XxfsRead(fuse_req_t pReq, fuse_ino_t ino, size_t cbSize, off_t cbOff, fuse_file_info *pInfo) {
+    if (f_bVerbose)
+        printf("read: ino = %" PRIu32 ", cbSize = %zu, cbOff = %zd\n", GetLin(ino), cbSize, cbOff);
     try {
         auto px = GetXxfs(pReq);
         std::unique_ptr<char []> upBuf;
@@ -249,7 +280,7 @@ void XxfsRead(fuse_req_t pReq, fuse_ino_t, size_t cbSize, off_t cbOff, fuse_file
         fuse_reply_buf(pReq, upBuf.get(), (size_t) cbRes);
     }
     catch (Exception &e) {
-        fprintf(stderr, "read: %d\n", e.nErrno);
+        fprintf(stderr, "read: [%d] %s\n", e.nErrno, strerror(e.nErrno));
         fuse_reply_err(pReq, e.nErrno);
     }
     catch (FatalException &e) {
@@ -258,7 +289,9 @@ void XxfsRead(fuse_req_t pReq, fuse_ino_t, size_t cbSize, off_t cbOff, fuse_file
     }
 }
 
-void XxfsWrite(fuse_req_t pReq, fuse_ino_t, const char *pBuf, size_t cbSize, off_t cbOff, fuse_file_info *pInfo) {
+void XxfsWrite(fuse_req_t pReq, fuse_ino_t ino, const char *pBuf, size_t cbSize, off_t cbOff, fuse_file_info *pInfo) {
+    if (f_bVerbose)
+        printf("write: ino = %" PRIu32 ", cbSize = %zu, cbOff = %zd\n", GetLin(ino), cbSize, cbOff);
     try {
         auto px = GetXxfs(pReq);
         auto cbRes = px->Write(
@@ -268,7 +301,7 @@ void XxfsWrite(fuse_req_t pReq, fuse_ino_t, const char *pBuf, size_t cbSize, off
         fuse_reply_write(pReq, (size_t) cbRes);
     }
     catch (Exception &e) {
-        fprintf(stderr, "write: %d\n", e.nErrno);
+        fprintf(stderr, "write: [%d] %s\n", e.nErrno, strerror(e.nErrno));
         fuse_reply_err(pReq, e.nErrno);
     }
     catch (FatalException &e) {
@@ -277,46 +310,52 @@ void XxfsWrite(fuse_req_t pReq, fuse_ino_t, const char *pBuf, size_t cbSize, off
     }
 }
 
-void XxfsRelease(fuse_req_t pReq, fuse_ino_t, fuse_file_info *pInfo) {
-    //try {
+void XxfsRelease(fuse_req_t pReq, fuse_ino_t ino, fuse_file_info *pInfo) {
+    if (f_bVerbose)
+        printf("release: ino = %" PRIu32 "\n", GetLin(ino));
+    try {
         auto px = GetXxfs(pReq);
         px->Release((OpenedFile *) (uintptr_t) pInfo->fh);
         fuse_reply_err(pReq, 0);
-    /*}
+    }
     catch (Exception &e) {
-        fprintf(stderr, "release: %d\n", e.nErrno);
+        fprintf(stderr, "release: [%d] %s\n", e.nErrno, strerror(e.nErrno));
         fuse_reply_err(pReq, e.nErrno);
     }
     catch (FatalException &e) {
         e.ShowWhat(stderr);
         exit(-1);
-    }*/
+    }
 }
 
-void XxfsFSync(fuse_req_t pReq, fuse_ino_t, int, fuse_file_info *pInfo) {
-    //try {
+void XxfsFSync(fuse_req_t pReq, fuse_ino_t ino, int, fuse_file_info *pInfo) {
+    if (f_bVerbose)
+        printf("fsync: ino = %" PRIu32 "\n", GetLin(ino));
+    try {
         auto px = GetXxfs(pReq);
         px->FSync((OpenedFile *) (uintptr_t) pInfo->fh);
         fuse_reply_err(pReq, 0);
-    /*}
+    }
     catch (Exception &e) {
-        fprintf(stderr, "fsync: %d\n", e.nErrno);
+        fprintf(stderr, "fsync: [%d] %s\n", e.nErrno, strerror(e.nErrno));
         fuse_reply_err(pReq, e.nErrno);
     }
     catch (FatalException &e) {
         e.ShowWhat(stderr);
         exit(-1);
-    }*/
+    }
 }
 
 void XxfsOpenDir(fuse_req_t pReq, fuse_ino_t ino, fuse_file_info *pInfo) {
+    if (f_bVerbose)
+        printf("opendir: ino = %" PRIu32 "\n", GetLin(ino));
     try {
         auto px = GetXxfs(pReq);
         pInfo->fh = (uint64_t) (uintptr_t) px->OpenDir(GetLin(ino));
         fuse_reply_open(pReq, pInfo);
     }
     catch (Exception &e) {
-        fprintf(stderr, "opendir: %d\n", e.nErrno);
+        fprintf(stderr, "opendir: [%d] %s\n", e.nErrno, strerror(e.nErrno));
         fuse_reply_err(pReq, e.nErrno);
     }
     catch (FatalException &e) {
@@ -325,7 +364,9 @@ void XxfsOpenDir(fuse_req_t pReq, fuse_ino_t ino, fuse_file_info *pInfo) {
     }
 }
 
-void XxfsReadDir(fuse_req_t pReq, fuse_ino_t, size_t cbSize, off_t vOff, fuse_file_info *pInfo) {
+void XxfsReadDir(fuse_req_t pReq, fuse_ino_t ino, size_t cbSize, off_t vOff, fuse_file_info *pInfo) {
+    if (f_bVerbose)
+        printf("readdir: ino = %" PRIu32 ", cbSize = %zu, vOff = %zd\n", GetLin(ino), cbSize, vOff);
     try {
         auto px = GetXxfs(pReq);
         auto upBuf = std::make_unique<char[]>(cbSize);
@@ -333,7 +374,7 @@ void XxfsReadDir(fuse_req_t pReq, fuse_ino_t, size_t cbSize, off_t vOff, fuse_fi
         fuse_reply_buf(pReq, upBuf.get(), cbRes);
     }
     catch (Exception &e) {
-        fprintf(stderr, "readdir: %d\n", e.nErrno);
+        fprintf(stderr, "readdir: [%d] %s\n", e.nErrno, strerror(e.nErrno));
         fuse_reply_err(pReq, e.nErrno);
     }
     catch (FatalException &e) {
@@ -342,14 +383,16 @@ void XxfsReadDir(fuse_req_t pReq, fuse_ino_t, size_t cbSize, off_t vOff, fuse_fi
     }
 }
 
-void XxfsReleaseDir(fuse_req_t pReq, fuse_ino_t, fuse_file_info *pInfo) {
+void XxfsReleaseDir(fuse_req_t pReq, fuse_ino_t ino, fuse_file_info *pInfo) {
+    if (f_bVerbose)
+        printf("releasedir: ino = %" PRIu32 "\n", GetLin(ino));
     try {
         auto px = GetXxfs(pReq);
         px->ReleaseDir((OpenedDir *) (uintptr_t) pInfo->fh);
         fuse_reply_err(pReq, 0);
     }
     catch (Exception &e) {
-        fprintf(stderr, "releasedir: %d\n", e.nErrno);
+        fprintf(stderr, "releasedir: [%d] %s\n", e.nErrno, strerror(e.nErrno));
         fuse_reply_err(pReq, e.nErrno);
     }
     catch (FatalException &e) {
@@ -358,7 +401,9 @@ void XxfsReleaseDir(fuse_req_t pReq, fuse_ino_t, fuse_file_info *pInfo) {
     }
 }
 
-void XxfsStatFs(fuse_req_t pReq, fuse_ino_t) {
+void XxfsStatFs(fuse_req_t pReq, fuse_ino_t ino) {
+    if (f_bVerbose)
+        printf("statfs: ino = %" PRIu32 "\n", GetLin(ino));
     try {
         auto px = GetXxfs(pReq);
         VfsStat vStat {};
@@ -366,7 +411,7 @@ void XxfsStatFs(fuse_req_t pReq, fuse_ino_t) {
         fuse_reply_statfs(pReq, &vStat);
     }
     catch (Exception &e) {
-        fprintf(stderr, "releasedir: %d\n", e.nErrno);
+        fprintf(stderr, "releasedir: [%d] %s\n", e.nErrno, strerror(e.nErrno));
         fuse_reply_err(pReq, e.nErrno);
     }
     catch (FatalException &e) {
@@ -376,6 +421,8 @@ void XxfsStatFs(fuse_req_t pReq, fuse_ino_t) {
 }
 
 void XxfsCreate(fuse_req_t pReq, fuse_ino_t inoPar, const char *pszName, mode_t, fuse_file_info *pInfo) {
+    if (f_bVerbose)
+        printf("create: inoPar = %" PRIu32 ", pszName = %s\n", GetLin(inoPar), pszName);
     // mode is ignored
     try {
         auto px = GetXxfs(pReq);
@@ -390,7 +437,7 @@ void XxfsCreate(fuse_req_t pReq, fuse_ino_t inoPar, const char *pszName, mode_t,
         fuse_reply_entry(pReq, &vEntry);
     }
     catch (Exception &e) {
-        fprintf(stderr, "releasedir: %d\n", e.nErrno);
+        fprintf(stderr, "releasedir: [%d] %s\n", e.nErrno, strerror(e.nErrno));
         fuse_reply_err(pReq, e.nErrno);
     }
     catch (FatalException &e) {
@@ -454,47 +501,58 @@ constexpr fuse_opt f_aXxfsOpts[] {
 void ShowHelp(const char *pszExec) {
     printf(
         "\n"
-        "Usage: %s -x path mountpoint\n"
+        "Usage: %s [-v] filepath mountpoint\n"
         "\n"
         "Options:\n"
-        "    -x path          to a device holding XXFS\n"
-        "    -h   --help      print help\n"
-        "    -V   --version   print version\n",
+        "    -v       enable verbose mode\n"
+        "    -h       print this help\n",
         pszExec
     );
 }
 
-}
-
-}
+}}
 
 int main(int ncArg, char *ppszArgs[]) {
     using namespace xxfs;
-    fuse_args vArgs = FUSE_ARGS_INIT(ncArg, ppszArgs);
-    fuse_cmdline_opts vFuseOpts;
-    if (fuse_parse_cmdline(&vArgs, &vFuseOpts)) {
+    const char *pszPath = nullptr;
+    const char *pszMountPoint = nullptr;
+    bool bHelp = false;
+    bool bIncorrect = false;
+    int chOpt;
+    while ((chOpt = getopt(ncArg, ppszArgs, ":hv")) != -1) {
+        switch (chOpt) {
+        case 'v':
+            f_bVerbose = true;
+            break;
+        case 'h':
+            bHelp = true;
+            break;
+        default:
+            bIncorrect = true;
+            break;
+        }
+    }
+    if (optind < ncArg)
+        pszPath = ppszArgs[optind++];
+    if (optind < ncArg)
+        pszMountPoint = ppszArgs[optind++];
+    if (bIncorrect) {
         fprintf(stderr, "Incorrect argument.\n");
         ShowHelp(ppszArgs[0]);
         return -1;
     }
-    RAII_GUARD(vFuseOpts.mountpoint, &free);
-    RAII_GUARD(&vArgs, &fuse_opt_free_args);
-    char *pszPath = nullptr;
-    if (fuse_opt_parse(&vArgs, &pszPath, f_aXxfsOpts, nullptr)) {
-        fprintf(stderr, "Incorrect argument.\n");
+    if (bHelp) {
         ShowHelp(ppszArgs[0]);
-        return -1;
-    }
-    if (vFuseOpts.show_help) {
-        ShowHelp(ppszArgs[0]);
-        return 0;
-    }
-    if (vFuseOpts.show_version) {
-        fuse_lowlevel_version();
         return 0;
     }
     if (!pszPath) {
         fprintf(stderr, "No file specified.\n");
+        ShowHelp(ppszArgs[0]);
+        return -1;
+    }
+    if (!pszMountPoint) {
+        fprintf(stderr, "No mount point specified.\n");
+        ShowHelp(ppszArgs[0]);
         return -1;
     }
     auto fd = open(pszPath, O_RDWR | O_DIRECT);
@@ -534,6 +592,8 @@ int main(int ncArg, char *ppszArgs[]) {
         return -1;
     }
     constexpr auto vOps = XxfsOps();
+    fuse_args vArgs {};
+    fuse_opt_add_arg(&vArgs, ppszArgs[0]);
     auto pSession = fuse_session_new(&vArgs, &vOps, sizeof(vOps), &vXxfs);
     if (!pSession)
         return -1;
@@ -541,7 +601,7 @@ int main(int ncArg, char *ppszArgs[]) {
     if (fuse_set_signal_handlers(pSession))
         return -1;
     RAII_GUARD(pSession, &fuse_remove_signal_handlers);
-    if (fuse_session_mount(pSession, vFuseOpts.mountpoint))
+    if (fuse_session_mount(pSession, pszMountPoint))
         return -1;
     RAII_GUARD(pSession, &fuse_session_unmount);
     // vFuseOpts.foreground is ignored

@@ -56,9 +56,6 @@ private:
 
 };
 
-extern template class FilePointer<false>;
-extern template class FilePointer<true>;
-
 using FilePtrR = FilePointer<false>;
 using FilePtrW = FilePointer<true>;
 

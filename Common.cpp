@@ -27,6 +27,18 @@ void FatalException::ShowWhat(FILE *pFile) const noexcept {
     );
 }
 
+void CheckPageSize() {
+    auto ncbPageSize = sysconf(_SC_PAGESIZE);
+    if (ncbPageSize != (long) kcbCluSize) {
+        fprintf(
+            stderr,
+            "Warning: Actual page size (%ld B) does not equal to predefined page size (%ld B)",
+            ncbPageSize,
+            (long) kcbCluSize
+        );
+    }
+}
+
 MetaResult FillMeta(MetaCluster *pcMeta, size_t cbSize) {
     if (cbSize > kcbMaxSize)
         return MetaResult::kTooLarge;
@@ -74,16 +86,20 @@ MetaResult FillMeta(MetaCluster *pcMeta, size_t cbSize) {
     return MetaResult::kSuccess;
 }
 
-void CheckPageSize() {
-    auto ncbPageSize = sysconf(_SC_PAGESIZE);
-    if (ncbPageSize != (long) kcbCluSize) {
-        fprintf(
-            stderr,
-            "Warning: Actual page size (%ld B) does not equal to predefined page size (%ld B)",
-            ncbPageSize,
-            (long) kcbCluSize
-        );
-    }
+void FillStat(FileStat &vStat, uint32_t lin, Inode *pi) noexcept {
+    vStat.st_dev = (dev_t) 0;
+    vStat.st_ino = (ino_t) lin;
+    vStat.st_mode = (mode_t) pi->uMode;
+    vStat.st_nlink = (nlink_t) pi->cLink;
+    vStat.st_uid = (uid_t) 0;
+    vStat.st_gid = (gid_t) 0;
+    vStat.st_rdev = 0;
+    vStat.st_size = (off_t) pi->cbSize;
+    vStat.st_blksize = (blksize_t) kcbCluSize;
+    vStat.st_blocks = (blkcnt_t) pi->ccSize;
+    vStat.st_atim = {};
+    vStat.st_mtim = {};
+    vStat.st_ctim = {};
 }
 
 }
