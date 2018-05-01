@@ -10,7 +10,7 @@ CXX := g++
 RM := rm -f
 
 OBJ := Common.o
-XXFSOBJ := BitmapAllocator.o FilePointer.o InodeCache.o OpenedDir.o OpenedFile.o Xxfs.o XxfsMain.o
+XXFSOBJ := BitmapAllocator.o FilePointer.o OpenedDir.o OpenedFile.o Xxfs.o XxfsMain.o
 MKXXFSOBJ := MkXxfsMain.o
 CLUXXOBJ := CluXxMain.o
 ALL := xxfs mkxxfs cluxx

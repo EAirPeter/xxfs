@@ -20,7 +20,7 @@ public:
     constexpr static auto kItEnd = ~off_t {0};
 
 public:
-    constexpr OpenedDir(Xxfs *px, Inode *pi) noexcept : OpenedFile(px, pi, false, false, false) {}
+    constexpr OpenedDir(Xxfs *px, Inode *pi, uint32_t lin) noexcept : OpenedFile(px, pi, lin, false, false, false) {}
 
     // care the case empty dir
     // requires pszName not empty

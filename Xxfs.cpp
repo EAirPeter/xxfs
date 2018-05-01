@@ -10,37 +10,61 @@ Xxfs::Xxfs(RaiiFile &&vRf, ShrPtr<MetaCluster> &&spcMeta) :
     x_vRf(std::move(vRf)),
     x_spcMeta(std::move(spcMeta)),
     x_vCluCache(x_vRf.Get()),
-    x_vInoCache(this),
+    x_vInoCluCache(x_vRf.Get()),
     x_vCluAlloc(x_vRf.Get(), x_spcMeta->lcnCluBmp, x_spcMeta->ccCluBmp),
     x_vInoAlloc(x_vRf.Get(), x_spcMeta->lcnInoBmp, x_spcMeta->ccInoBmp)
-{
-    // load root directory inode, keep it forever
-    x_vInoCache.IncLookup(0);
+{}
+
+uint32_t Xxfs::LinAt(const char *pszPath) {
+    auto lin = LinPar(pszPath);
+    if (*pszPath) {
+        auto pi = X_GetInode(lin);
+        {
+            OpenedDir vDir(this, pi, lin);
+            lin = vDir.Lookup(pszPath, DirPolicy::kAny).first;
+        }
+    }
+    return lin;
 }
 
-uint32_t Xxfs::Lookup(FileStat &vStat, uint32_t linPar, const char *pszName) {
+uint32_t Xxfs::LinPar(const char *&pszPath) {
+    uint32_t lin = 0;
+    auto pszDelim = strchr(++pszPath, '/');
+    while (pszDelim) {
+        auto pi = X_GetInode(lin);
+        {
+            OpenedDir vDir(this, pi, lin);
+            lin = vDir.Lookup(std::string(pszPath, pszDelim).c_str(), DirPolicy::kDir).first;
+        }
+        pszPath = pszDelim;
+        pszDelim = strchr(++pszPath, '/');
+    }
+    return lin;
+}
+
+/*uint32_t Xxfs::Lookup(FileStat &vStat, uint32_t linPar, const char *pszName) {
     if (strlen(pszName) >= kcePerClu)
         throw Exception {ENAMETOOLONG};
-    auto piPar = x_vInoCache.At(linPar);
+    auto piPar = X_GetInode(linPar);
     OpenedDir vParDir(this, piPar);
     auto [lin, uMode] = vParDir.Lookup(pszName, DirPolicy::kAny);
     (void) uMode;
-    auto pi = x_vInoCache.IncLookup(lin);
+    auto pi = X_GetInode(lin);
     FillStat(vStat, lin, pi);
     return lin;
 }
 
 void Xxfs::Forget(uint32_t lin, uint64_t cLookup) {
     x_vInoCache.DecLookup(lin, cLookup);
-}
+}*/
 
 void Xxfs::GetAttr(FileStat &vStat, uint32_t lin) {
-    auto pi = x_vInoCache.At(lin);
+    auto pi = X_GetInode(lin);
     FillStat(vStat, lin, pi);
 }
 
-void Xxfs::SetAttr(FileStat &vStat, FileStat *pStat, uint32_t lin, int nFlags, fuse_file_info *pInfo) {
-    auto pi = x_vInoCache.At(lin);
+/*void Xxfs::SetAttr(FileStat &vStat, FileStat *pStat, uint32_t lin, int nFlags, fuse_file_info *pInfo) {
+    auto pi = X_GetInode(lin);
     if (nFlags & FUSE_SET_ATTR_SIZE) {
         if (pi->IsDir())
             throw Exception {EISDIR};
@@ -51,57 +75,45 @@ void Xxfs::SetAttr(FileStat &vStat, FileStat *pStat, uint32_t lin, int nFlags, f
             Y_FileShrink(pi);
     }
     FillStat(vStat, lin, pi);
-}
+}*/
 
-const char *Xxfs::ReadLink(uint32_t lin) {
-    auto pi = x_vInoCache.At(lin);
+void Xxfs::ReadLink(uint32_t lin, char *pBuf, size_t cbSize) {
+    auto pi = X_GetInode(lin);
     auto lcn = pi->lcnIdx0[0];
-    if (!lcn)
-        return "";
-    return Y_Map<char>(lcn).get();
+    strncpy(pBuf, lcn ? Y_Map<char>(lcn).get() : "", cbSize);
 }
 
-uint32_t Xxfs::MkDir(FileStat &vStat, uint32_t linPar, const char *pszName) {
+void Xxfs::MkDir(uint32_t linPar, const char *pszName) {
     if (strlen(pszName) >= kcePerClu)
         throw Exception {ENAMETOOLONG};
-    auto piPar = x_vInoCache.At(linPar);
+    auto piPar = X_GetInode(linPar);
     if (!piPar->IsDir())
         throw Exception {ENOTDIR};
     auto lin = Y_AllocIno();
-    auto pi = x_vInoCache.IncLookup(lin);
+    auto pi = X_GetInode(lin);
     memset(pi, 0, sizeof(Inode));
     pi->uMode = S_IFDIR | 0777;
     pi->cLink = 1;
     try {
-        try {
-            OpenedDir vDir(this, piPar);
-            vDir.Insert(pszName, lin, pi->uMode, DirPolicy::kNone);
-        }
-        catch (...) {
-            x_vInoCache.DecLookup(lin);
-            throw;
-        }
-        FillStat(vStat, lin, pi);
-        return lin;
+        OpenedDir vDir(this, piPar, linPar);
+        vDir.Insert(pszName, lin, pi->uMode, DirPolicy::kNone);
     }
     catch (...) {
-        Y_EraseIno(lin, pi);
+        Y_UnlinkIno(lin, pi);
         throw;
     }
 }
 void Xxfs::Unlink(uint32_t linPar, const char *pszName) {
     if (strlen(pszName) >= kcePerClu)
         throw Exception {ENAMETOOLONG};
-    auto piPar = x_vInoCache.At(linPar);
+    auto piPar = X_GetInode(linPar);
     if (!piPar->IsDir())
         throw Exception {ENOTDIR};
     {
-        OpenedDir vDir(this, piPar);
+        OpenedDir vDir(this, piPar, linPar);
         auto [lin, uMode] = vDir.Remove(pszName, DirPolicy::kNotDir);
         (void) uMode;
-        auto pi = x_vInoCache.IncLookup(lin);
-        --pi->cLink;
-        x_vInoCache.DecLookup(lin);
+        Y_UnlinkIno(lin, X_GetInode(lin));
         vDir.Shrink();
     }
     Y_FileShrink(piPar);
@@ -110,59 +122,50 @@ void Xxfs::Unlink(uint32_t linPar, const char *pszName) {
 void Xxfs::RmDir(uint32_t linPar, const char *pszName) {
     if (strlen(pszName) >= kcePerClu)
         throw Exception {ENAMETOOLONG};
-    auto piPar = x_vInoCache.At(linPar);
+    auto piPar = X_GetInode(linPar);
     if (!piPar->IsDir())
         throw Exception {ENOTDIR};
     {
-        OpenedDir vDir(this, piPar);
+        OpenedDir vDir(this, piPar, linPar);
         auto [lin, uMode] = vDir.Lookup(pszName, DirPolicy::kDir);
         (void) uMode;
-        auto pi = x_vInoCache.IncLookup(lin);
+        auto pi = X_GetInode(lin);
         if (pi->ccSize) {
             auto spc = Y_Map<DirCluster>(pi->lcnIdx0[0]);
             if (spc->aEnts[0].linFile != 1)
                 throw Exception {ENOTEMPTY};
         }
         vDir.Remove(pszName, DirPolicy::kDir);
-        --pi->cLink;
-        x_vInoCache.DecLookup(lin);
+        Y_UnlinkIno(lin, pi);
         vDir.Shrink();
     }
     Y_FileShrink(piPar);
 }
 
-uint32_t Xxfs::SymLink(FileStat &vStat, const char *pszLink, uint32_t linPar, const char *pszName) {
+void Xxfs::SymLink(const char *pszLink, uint32_t linPar, const char *pszName) {
     if (strlen(pszName) >= kcePerClu)
         throw Exception {ENAMETOOLONG};
     auto cbLength = strlen(pszLink);
     if (cbLength >= kcbCluSize)
         throw Exception {ENAMETOOLONG};
-    auto piPar = x_vInoCache.At(linPar);
+    auto piPar = X_GetInode(linPar);
     if (!piPar->IsDir())
         throw Exception {ENOTDIR};
     auto lin = Y_AllocIno();
-    auto pi = x_vInoCache.IncLookup(lin);
+    auto pi = X_GetInode(lin);
     memset(pi, 0, sizeof(Inode));
     pi->uMode = S_IFLNK | 0777;
     pi->cLink = 1;
     try {
         {
-            OpenedFile vFile(this, pi, true, false, false);
+            OpenedFile vFile(this, pi, lin, true, false, false);
             vFile.DoWrite(pszLink, (uint64_t) cbLength + 1, 0);
         }
-        try {
-            OpenedDir vDir(this, piPar);
-            vDir.Insert(pszName, lin, pi->uMode, DirPolicy::kNone);
-        }
-        catch (...) {
-            x_vInoCache.DecLookup(lin);
-            throw;
-        }
-        FillStat(vStat, lin, pi);
-        return lin;
+        OpenedDir vDir(this, piPar, linPar);
+        vDir.Insert(pszName, lin, pi->uMode, DirPolicy::kNone);
     }
     catch (...) {
-        Y_EraseIno(lin, pi);
+        Y_UnlinkIno(lin, pi);
         throw;
     }
 }
@@ -176,24 +179,23 @@ void Xxfs::Rename(
         throw Exception {ENAMETOOLONG};
     if (strlen(pszNewName) >= kcePerClu)
         throw Exception {ENAMETOOLONG};
-    auto piPar = x_vInoCache.At(linPar);
+    auto piPar = X_GetInode(linPar);
     if (!piPar->IsDir())
         throw Exception {ENOTDIR};
-    auto piNewPar = x_vInoCache.At(linNewPar);
+    auto piNewPar = X_GetInode(linNewPar);
     if (!piNewPar->IsDir())
         throw Exception {ENOTDIR};
     {
-        OpenedDir vDir(this, piPar);
-        OpenedDir vNewDir(this, piNewPar);
+        OpenedDir vDir(this, piPar, linPar);
+        OpenedDir vNewDir(this, piNewPar, linNewPar);
         switch (uFlags) {
         case 0: {
             auto [lin, uMode] = vDir.Lookup(pszName, DirPolicy::kAny);
             auto [linOth, uOthMode] = vNewDir.Insert(pszNewName, lin, uMode, DirPolicy::kNotDir);
             (void) uOthMode;
             if (linOth) {
-                auto piOth = x_vInoCache.IncLookup(linOth);
-                --piOth->cLink;
-                x_vInoCache.DecLookup(linOth);
+                auto piOth = X_GetInode(linOth);
+                Y_UnlinkIno(linOth, piOth);
             }
             vDir.Remove(pszName, DirPolicy::kAny);
             break;
@@ -223,26 +225,34 @@ void Xxfs::Rename(
     Y_FileShrink(piNewPar);
 }
 
-void Xxfs::Link(FileStat &vStat, uint32_t lin, uint32_t linNewPar, const char *pszNewName) {
+void Xxfs::Link(uint32_t lin, uint32_t linNewPar, const char *pszNewName) {
     if (strlen(pszNewName) >= kcePerClu)
         throw Exception {ENAMETOOLONG};
-    auto pi = x_vInoCache.At(lin);
+    auto pi = X_GetInode(lin);
     if (pi->IsDir())
         throw Exception {EISDIR};
-    auto piNewPar = x_vInoCache.At(linNewPar);
+    auto piNewPar = X_GetInode(linNewPar);
     if (!piNewPar->IsDir())
         throw Exception {ENOTDIR};
-    OpenedDir vDir(this, piNewPar);
+    OpenedDir vDir(this, piNewPar, linNewPar);
     vDir.Insert(pszNewName, lin, pi->uMode, DirPolicy::kNone);
-    x_vInoCache.IncLookup(lin);
     ++pi->cLink;
-    FillStat(vStat, lin, pi);
+}
+
+void Xxfs::Truncate(uint32_t lin, off_t cbNewSize) {
+    auto pi = X_GetInode(lin);
+    if (pi->IsDir())
+        throw Exception {EISDIR};
+    if ((size_t) cbNewSize>= kcbMaxSize)
+        throw Exception {EINVAL};
+    pi->cbSize = (uint64_t) cbNewSize;
+    Y_FileShrink(pi);
 }
 
 OpenedFile *Xxfs::Open(uint32_t lin, fuse_file_info *pInfo) {
     if (pInfo->flags & O_DIRECTORY)
         throw Exception {ENOTSUP};
-    auto pi = x_vInoCache.At(lin);
+    auto pi = X_GetInode(lin);
     if (pi->IsDir())
         throw Exception {EISDIR};
     bool bWrite = false;
@@ -271,17 +281,16 @@ OpenedFile *Xxfs::Open(uint32_t lin, fuse_file_info *pInfo) {
     }
     else
         pInfo->direct_io = false;
-    return new OpenedFile(this, pi, bWrite, bAppend, bDirect);
+    return new OpenedFile(this, pi, lin, bWrite, bAppend, bDirect);
 }
 
-uint64_t Xxfs::Read(OpenedFile *pFile, std::unique_ptr<char []> &upBuf, uint64_t cbSize, uint64_t cbOff) {
+uint64_t Xxfs::Read(OpenedFile *pFile, void *pBuf, uint64_t cbSize, uint64_t cbOff) {
     if (!cbSize)
         return 0;
     if (cbOff >= pFile->pi->cbSize)
         return 0;
     cbSize = std::min(pFile->pi->cbSize - cbOff, cbSize);
-    upBuf = std::make_unique<char []>(cbSize);
-    pFile->DoRead(upBuf.get(), cbSize, cbOff);
+    pFile->DoRead(pBuf, cbSize, cbOff);
     return cbSize;
 }
 
@@ -309,14 +318,13 @@ void Xxfs::FSync(OpenedFile *pFile) noexcept {
 }
 
 OpenedDir *Xxfs::OpenDir(uint32_t lin) {
-    auto pi = x_vInoCache.At(lin);
+    auto pi = X_GetInode(lin);
     if (!pi->IsDir())
         throw Exception {ENOTDIR};
-    return new OpenedDir(this, pi);
+    return new OpenedDir(this, pi, lin);
 }
 
-size_t Xxfs::ReadDir(OpenedDir *pDir, fuse_req_t pReq, char *pBuf, size_t cbSize, off_t vOff) {
-    size_t cbRes = 0;
+void Xxfs::ReadDir(OpenedDir *pDir, void *pBuf, fuse_fill_dir_t fnFill, off_t vOff) {
     auto vNextOff = pDir->IterSeek(vOff);
     while (vNextOff != OpenedDir::kItEnd) {
         FileStat vStat;
@@ -324,13 +332,9 @@ size_t Xxfs::ReadDir(OpenedDir *pDir, fuse_req_t pReq, char *pBuf, size_t cbSize
         char szName[kcePerClu];
         strcpy(szName, pszName);
         vNextOff = pDir->IterNext();
-        auto cbNeed = fuse_add_direntry(pReq, pBuf + cbRes, cbSize, szName, &vStat, vNextOff);
-        if (cbNeed > cbSize)
+        if (fnFill(pBuf, szName, &vStat, vNextOff, {}))
             break;
-        cbRes += cbNeed;
-        cbSize -= cbNeed;
     }
-    return cbRes;
 }
 
 void Xxfs::ReleaseDir(OpenedDir *pDir) noexcept {
@@ -350,38 +354,36 @@ void Xxfs::StatFs(VfsStat &vStat) const noexcept {
     vStat.f_namemax = (unsigned long) (kcePerClu - 1);
 }
 
-std::pair<uint32_t, OpenedFile *> Xxfs::Create(FileStat &vStat, uint32_t linPar, const char *pszName) {
+OpenedFile *Xxfs::Create(uint32_t linPar, const char *pszName) {
     if (strlen(pszName) >= kcePerClu)
         throw Exception {ENAMETOOLONG};
-    auto piPar = x_vInoCache.At(linPar);
+    auto piPar = X_GetInode(linPar);
     if (!piPar->IsDir())
         throw Exception {ENOTDIR};
     auto lin = Y_AllocIno();
-    auto pi = x_vInoCache.IncLookup(lin);
+    auto pi = X_GetInode(lin);
     memset(pi, 0, sizeof(Inode));
     pi->uMode = S_IFREG | 0777;
     pi->cLink = 1;
     try {
-        try {
-            OpenedDir vDir(this, piPar);
-            vDir.Insert(pszName, lin, pi->uMode, DirPolicy::kNone);
-        }
-        catch (...) {
-            x_vInoCache.DecLookup(lin);
-            throw;
-        }
-        FillStat(vStat, lin, pi);
-        return {lin, new OpenedFile(this, pi, true, false, false)};
+        OpenedDir vDir(this, piPar, linPar);
+        vDir.Insert(pszName, lin, pi->uMode, DirPolicy::kNone);
+        return new OpenedFile(this, pi, lin, true, false, false);
     }
     catch (...) {
-        Y_EraseIno(lin, pi);
+        Y_UnlinkIno(lin, pi);
         throw;
     }
 }
 
-
 uint32_t Xxfs::AvailClu() const noexcept {
     return x_spcMeta->ccTotal - x_spcMeta->ccUsed;
+}
+
+inline Inode *Xxfs::X_GetInode(uint32_t lin) noexcept {
+    auto vin = lin % kciPerClu;
+    auto vcn = lin / kciPerClu;
+    return &x_vInoCluCache.At<InodeCluster>(x_spcMeta->lcnIno + vcn)->aInos[vin];
 }
 
 ShrPtr<InodeCluster> Xxfs::Y_MapInoClu(uint32_t vcn) noexcept {
@@ -394,7 +396,9 @@ inline uint32_t Xxfs::Y_AllocIno() {
     return lin;
 }
 
-void Xxfs::Y_EraseIno(uint32_t lin, Inode *pi) noexcept {
+void Xxfs::Y_UnlinkIno(uint32_t lin, Inode *pi) noexcept {
+    if (--pi->cLink)
+        return;
     pi->cbSize = 0;
     Y_FileShrink(pi);
     assert(!pi->ccSize);

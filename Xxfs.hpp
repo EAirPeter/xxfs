@@ -5,7 +5,6 @@
 
 #include "BitmapAllocator.hpp"
 #include "ClusterCache.hpp"
-#include "InodeCache.hpp"
 #include "OpenedFile.hpp"
 #include "OpenedDir.hpp"
 #include "Raii.hpp"
@@ -14,6 +13,7 @@ namespace xxfs {
 
 class Xxfs {
 private:
+    friend class PathCache;
     friend class InodeCache;
     friend FilePtrR;
     friend FilePtrW;
@@ -22,43 +22,55 @@ public:
     Xxfs(RaiiFile &&vRf, ShrPtr<MetaCluster> &&spcMeta);
 
 public:
+    uint32_t LinAt(const char *pszPath);
+    uint32_t LinPar(const char *&pszPath);
+
     // returns inode number, increase cLookup when hit
-    uint32_t Lookup(FileStat &vStat, uint32_t linPar, const char *pszName);
-    void Forget(uint32_t lin, uint64_t cLookup);
+    //uint32_t Lookup(FileStat &vStat, uint32_t linPar, const char *pszName);
+    //void Forget(uint32_t lin, uint64_t cLookup);
     void GetAttr(FileStat &vStat, uint32_t lin);
-    void SetAttr(FileStat &vStat, FileStat *pStat, uint32_t lin, int nFlags, fuse_file_info *pInfo);
-    const char *ReadLink(uint32_t lin);
-    uint32_t MkDir(FileStat &vStat, uint32_t linPar, const char *pszName);
+    //void SetAttr(FileStat &vStat, FileStat *pStat, uint32_t lin, int nFlags, fuse_file_info *pInfo);
+    //const char *ReadLink(uint32_t lin);
+    void ReadLink(uint32_t lin, char *pBuf, size_t cbSize);
+    //uint32_t MkDir(FileStat &vStat, uint32_t linPar, const char *pszName);
+    void MkDir(uint32_t linPar, const char *pszName);
     void Unlink(uint32_t linPar, const char *pszName);
     void RmDir(uint32_t linPar, const char *pszName);
-    uint32_t SymLink(FileStat &vStat, const char *pszLink, uint32_t linPar, const char *pszName);
+    //uint32_t SymLink(FileStat &vStat, const char *pszLink, uint32_t linPar, const char *pszName);
+    void SymLink(const char *pszLink, uint32_t linPar, const char *pszName);
     void Rename(
         uint32_t linPar, const char *pszName,
         uint32_t linNewPar, const char *pszNewName,
         unsigned uFlags
     );
-    void Link(FileStat &vStat, uint32_t lin, uint32_t linNewPar, const char *pszNewName);
+    //void Link(FileStat &vStat, uint32_t lin, uint32_t linNewPar, const char *pszNewName);
+    void Link(uint32_t lin, uint32_t linNewPar, const char *pszNewName);
+    void Truncate(uint32_t lin, off_t cbNewSize);
     OpenedFile *Open(uint32_t lin, fuse_file_info *pInfo);
-    uint64_t Read(OpenedFile *pFile, std::unique_ptr<char []> &upBuf, uint64_t cbSize, uint64_t cbOff);
+    uint64_t Read(OpenedFile *pFile, void *pBuf, uint64_t cbSize, uint64_t cbOff);
     uint64_t Write(OpenedFile *pFile, const void *pBuf, uint64_t cbSize, uint64_t cbOff);
     void Release(OpenedFile *pFile) noexcept;
     void FSync(OpenedFile *pFile) noexcept;
     OpenedDir *OpenDir(uint32_t lin);
-    size_t ReadDir(OpenedDir *pDir, fuse_req_t pReq, char *pBuf, size_t cbSize, off_t vOff);
+    void ReadDir(OpenedDir *pDir, void *pBuf, fuse_fill_dir_t fnFill, off_t vOff);
     void ReleaseDir(OpenedDir *pDir) noexcept;
     void StatFs(VfsStat &vStat) const noexcept;
-    std::pair<uint32_t, OpenedFile *> Create(FileStat &vStat, uint32_t linPar, const char *pszName);
+    //std::pair<uint32_t, OpenedFile *> Create(FileStat &vStat, uint32_t linPar, const char *pszName);
+    OpenedFile *Create(uint32_t linPar, const char *pszName);
 
 public:
     // get count of free cluster
     uint32_t AvailClu() const noexcept;
 
 private:
+    Inode *X_GetInode(uint32_t lin) noexcept;
+
+private:
     // allocate a free cluster and update meta cluster
     ShrPtr<InodeCluster> Y_MapInoClu(uint32_t vcn) noexcept;
     uint32_t Y_AllocIno();
     // invoked when both lookup count and link count are 0
-    void Y_EraseIno(uint32_t lin, Inode *pi) noexcept;
+    void Y_UnlinkIno(uint32_t lin, Inode *pi) noexcept;
     // noexcept, assume mmap does not fail
     template<class tObj>
     inline ShrPtr<tObj> Y_Map(uint32_t lcn) noexcept {
@@ -85,7 +97,7 @@ private:
     RaiiFile x_vRf;
     ShrPtr<MetaCluster> x_spcMeta;
     ClusterCache<65536> x_vCluCache;
-    InodeCache x_vInoCache;
+    ClusterCache<4096> x_vInoCluCache;
     BitmapAllocator x_vCluAlloc;
     BitmapAllocator x_vInoAlloc;
     

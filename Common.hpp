@@ -6,7 +6,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <fuse_lowlevel.h>
+#include <fuse.h>
 #include <inttypes.h>
 #include <linux/fs.h>
 #include <linux/limits.h>
@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <functional>
 #include <limits>
+#include <list>
 #include <memory>
 #include <new>
 #include <numeric>

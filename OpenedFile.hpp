@@ -11,8 +11,8 @@ class Xxfs;
 
 class OpenedFile : NoCopyMove {
 public:    
-    constexpr OpenedFile(Xxfs *px_, Inode *pi_, bool bWrite_, bool bAppend_, bool bDirect_) noexcept :
-        px {px_}, pi {pi_}, bWrite {bWrite_}, bAppend {bAppend_}, bDirect {bDirect_}
+    constexpr OpenedFile(Xxfs *px_, Inode *pi_, uint32_t lin_, bool bWrite_, bool bAppend_, bool bDirect_) noexcept :
+        px {px_}, pi {pi_}, lin {lin_}, bWrite {bWrite_}, bAppend {bAppend_}, bDirect {bDirect_}
     {}
 
     // DoRead and DoWrite dose not check access right and bounds
@@ -24,6 +24,7 @@ public:
 public:
     Xxfs *const px;
     Inode *const pi;
+    const uint32_t lin;
     const uint32_t bWrite : 1;
     const uint32_t bAppend : 1;
     const uint32_t bDirect : 1;
