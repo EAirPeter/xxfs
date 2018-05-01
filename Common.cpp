@@ -62,6 +62,7 @@ MetaResult FillMeta(MetaCluster *pcMeta, size_t cbSize) {
         else
             ciUpper = ci;
     }
+    ciTotal = (ciTotal + kciPerClu - 1) / kciPerClu * kciPerClu;
     auto cqInoBmp =  (ciTotal + 63) / 64;
     auto ccInoBmp = (cqInoBmp + kcqPerClu - 1) / kcqPerClu;
     auto ccIno =  (ciTotal + kciPerClu - 1) / kciPerClu;

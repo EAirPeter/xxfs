@@ -25,7 +25,7 @@ uint32_t Xxfs::Lookup(FileStat &vStat, uint32_t linPar, const char *pszName) {
     OpenedDir vParDir(this, piPar);
     auto [lin, uMode] = vParDir.Lookup(pszName, DirPolicy::kAny);
     (void) uMode;
-    auto pi = x_vInoCache.IncLookup(linPar);
+    auto pi = x_vInoCache.IncLookup(lin);
     FillStat(vStat, lin, pi);
     return lin;
 }
@@ -67,7 +67,7 @@ uint32_t Xxfs::MkDir(FileStat &vStat, uint32_t linPar, const char *pszName) {
     auto piPar = x_vInoCache.At(linPar);
     if (!piPar->IsDir())
         throw Exception {ENOTDIR};
-    auto lin = x_vInoAlloc.Alloc();
+    auto lin = Y_AllocIno();
     auto pi = x_vInoCache.IncLookup(lin);
     memset(pi, 0, sizeof(Inode));
     pi->uMode = S_IFDIR | 0777;
@@ -140,7 +140,7 @@ uint32_t Xxfs::SymLink(FileStat &vStat, const char *pszLink, uint32_t linPar, co
     auto piPar = x_vInoCache.At(linPar);
     if (!piPar->IsDir())
         throw Exception {ENOTDIR};
-    auto lin = x_vInoAlloc.Alloc();
+    auto lin = Y_AllocIno();
     auto pi = x_vInoCache.IncLookup(lin);
     memset(pi, 0, sizeof(Inode));
     pi->uMode = S_IFLNK | 0777;
@@ -321,8 +321,10 @@ size_t Xxfs::ReadDir(OpenedDir *pDir, fuse_req_t pReq, char *pBuf, size_t cbSize
     while (vNextOff != OpenedDir::kItEnd) {
         FileStat vStat;
         auto pszName = pDir->IterGet(vStat);
+        char szName[kcePerClu];
+        strcpy(szName, pszName);
         vNextOff = pDir->IterNext();
-        auto cbNeed = fuse_add_direntry(pReq, pBuf, cbSize, pszName, &vStat, vNextOff);
+        auto cbNeed = fuse_add_direntry(pReq, pBuf + cbRes, cbSize, szName, &vStat, vNextOff);
         if (cbNeed > cbSize)
             break;
         cbRes += cbNeed;
@@ -354,7 +356,7 @@ std::pair<uint32_t, OpenedFile *> Xxfs::Create(FileStat &vStat, uint32_t linPar,
     auto piPar = x_vInoCache.At(linPar);
     if (!piPar->IsDir())
         throw Exception {ENOTDIR};
-    auto lin = x_vInoAlloc.Alloc();
+    auto lin = Y_AllocIno();
     auto pi = x_vInoCache.IncLookup(lin);
     memset(pi, 0, sizeof(Inode));
     pi->uMode = S_IFREG | 0777;
@@ -384,6 +386,12 @@ uint32_t Xxfs::AvailClu() const noexcept {
 
 ShrPtr<InodeCluster> Xxfs::Y_MapInoClu(uint32_t vcn) noexcept {
     return x_vCluCache.At<InodeCluster>(x_spcMeta->lcnIno + vcn);
+}
+
+inline uint32_t Xxfs::Y_AllocIno() {
+    auto lin = x_vInoAlloc.Alloc();
+    ++x_spcMeta->ciUsed;
+    return lin;
 }
 
 void Xxfs::Y_EraseIno(uint32_t lin, Inode *pi) noexcept {

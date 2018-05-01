@@ -68,6 +68,7 @@ inline uint32_t FromNtmbs(const char *psz) {
         if (uNew < uRes)
             throw CvtExn {};
         uRes = uNew;
+        ++psz;
     }
     return uRes;
 }

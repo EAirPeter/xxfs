@@ -56,6 +56,7 @@ public:
 private:
     // allocate a free cluster and update meta cluster
     ShrPtr<InodeCluster> Y_MapInoClu(uint32_t vcn) noexcept;
+    uint32_t Y_AllocIno();
     // invoked when both lookup count and link count are 0
     void Y_EraseIno(uint32_t lin, Inode *pi) noexcept;
     // noexcept, assume mmap does not fail

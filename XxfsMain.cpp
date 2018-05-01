@@ -347,8 +347,8 @@ void XxfsFSync(fuse_req_t pReq, fuse_ino_t ino, int, fuse_file_info *pInfo) {
 }
 
 void XxfsOpenDir(fuse_req_t pReq, fuse_ino_t ino, fuse_file_info *pInfo) {
-    if (f_bVerbose)
-        printf("opendir: ino = %" PRIu32 "\n", GetLin(ino));
+    //if (f_bVerbose)
+    //    printf("opendir: ino = %" PRIu32 "\n", GetLin(ino));
     try {
         auto px = GetXxfs(pReq);
         pInfo->fh = (uint64_t) (uintptr_t) px->OpenDir(GetLin(ino));
@@ -365,8 +365,8 @@ void XxfsOpenDir(fuse_req_t pReq, fuse_ino_t ino, fuse_file_info *pInfo) {
 }
 
 void XxfsReadDir(fuse_req_t pReq, fuse_ino_t ino, size_t cbSize, off_t vOff, fuse_file_info *pInfo) {
-    if (f_bVerbose)
-        printf("readdir: ino = %" PRIu32 ", cbSize = %zu, vOff = %zd\n", GetLin(ino), cbSize, vOff);
+    //if (f_bVerbose)
+    //    printf("readdir: ino = %" PRIu32 ", cbSize = %zu, vOff = %zd\n", GetLin(ino), cbSize, vOff);
     try {
         auto px = GetXxfs(pReq);
         auto upBuf = std::make_unique<char[]>(cbSize);
@@ -384,8 +384,8 @@ void XxfsReadDir(fuse_req_t pReq, fuse_ino_t ino, size_t cbSize, off_t vOff, fus
 }
 
 void XxfsReleaseDir(fuse_req_t pReq, fuse_ino_t ino, fuse_file_info *pInfo) {
-    if (f_bVerbose)
-        printf("releasedir: ino = %" PRIu32 "\n", GetLin(ino));
+    //if (f_bVerbose)
+    //    printf("releasedir: ino = %" PRIu32 "\n", GetLin(ino));
     try {
         auto px = GetXxfs(pReq);
         px->ReleaseDir((OpenedDir *) (uintptr_t) pInfo->fh);
@@ -411,7 +411,7 @@ void XxfsStatFs(fuse_req_t pReq, fuse_ino_t ino) {
         fuse_reply_statfs(pReq, &vStat);
     }
     catch (Exception &e) {
-        fprintf(stderr, "releasedir: [%d] %s\n", e.nErrno, strerror(e.nErrno));
+        fprintf(stderr, "statfs: [%d] %s\n", e.nErrno, strerror(e.nErrno));
         fuse_reply_err(pReq, e.nErrno);
     }
     catch (FatalException &e) {
@@ -434,10 +434,10 @@ void XxfsCreate(fuse_req_t pReq, fuse_ino_t inoPar, const char *pszName, mode_t,
         pInfo->fh = (uint64_t) (uintptr_t) pFile;
         pInfo->direct_io = false;
         pInfo->keep_cache = false;
-        fuse_reply_entry(pReq, &vEntry);
+        fuse_reply_create(pReq, &vEntry, pInfo);
     }
     catch (Exception &e) {
-        fprintf(stderr, "releasedir: [%d] %s\n", e.nErrno, strerror(e.nErrno));
+        fprintf(stderr, "create: [%d] %s\n", e.nErrno, strerror(e.nErrno));
         fuse_reply_err(pReq, e.nErrno);
     }
     catch (FatalException &e) {
@@ -594,6 +594,8 @@ int main(int ncArg, char *ppszArgs[]) {
     constexpr auto vOps = XxfsOps();
     fuse_args vArgs {};
     fuse_opt_add_arg(&vArgs, ppszArgs[0]);
+    // if (f_bVerbose)
+    //     fuse_opt_add_arg(&vArgs, "-d");
     auto pSession = fuse_session_new(&vArgs, &vOps, sizeof(vOps), &vXxfs);
     if (!pSession)
         return -1;

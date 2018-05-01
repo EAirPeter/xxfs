@@ -270,9 +270,10 @@ void OpenedDir::Shrink(bool bForce) noexcept {
     auto ceNew = ccSizeNew * kcePerClu;
     for (auto pLenNext = &peRoot->lenNext; *pLenNext; ) {
         auto pe = X_GetEnt(*pLenNext);
-        if (*pLenNext >= ceNew)
+        if (*pLenNext < ceNew)
+            pLenNext = &pe->lenNext;
+        else
             *pLenNext = pe->lenNext;
-        pLenNext = &pe->lenNext;
     }
     if (peRoot->lenChild) {
         MappedStack vStk;
