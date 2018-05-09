@@ -26,8 +26,11 @@ public:
         uint32_t idx;
         if (it == x_map.end()) {
             idx = x_aLinked[kCapacity].idxNext;
-            if (x_aMapped[idx])
+            if (x_aMapped[idx]) {
                 x_map.erase(x_aLcn[idx]);
+                x_aMapped[idx].reset();
+            }
+            x_aLcn[idx] = lcn;
             x_aMapped[idx] = ShrMap<void>(x_fd, lcn);
             x_map.emplace(lcn, idx);
         }
@@ -35,7 +38,18 @@ public:
             idx = it->second;
         X_LnkRemove(idx);
         X_LnkAddTail(idx);
+        assert(x_map.size() <= (size_t) kCapacity);
         return std::reinterpret_pointer_cast<tObj>(x_aMapped[idx]);
+    }
+
+    inline void Touch(uint32_t lcn) noexcept {
+        auto it = x_map.find(lcn);
+        if (it == x_map.end())
+            return;
+        auto idx = it->second;
+        X_LnkRemove(idx);
+        X_LnkAddTail(idx);
+        assert(x_map.size() <= (size_t) kCapacity);
     }
 
     inline void Remove(uint32_t lcn) noexcept {
@@ -46,7 +60,8 @@ public:
         X_LnkRemove(idx);
         X_LnkAddHead(idx);
         x_map.erase(it);
-        x_aMapped[idx].Release();
+        x_aMapped[idx].reset();
+        assert(x_map.size() <= (size_t) kCapacity);
     }
 
 private:
@@ -70,7 +85,7 @@ private:
         x_aLinked[kCapacity].idxPrev = idx;
         x_aLinked[idxPrev].idxNext = idx;
         x_aLinked[idx].idxPrev = idxPrev;
-        x_aLinked[idx].idxNext = 0;
+        x_aLinked[idx].idxNext = kCapacity;
     }
 
 private:

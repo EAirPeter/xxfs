@@ -13,9 +13,7 @@ class Xxfs;
 template<bool kAlloc>
 class FilePointer : NoCopyMove {
 public:
-    constexpr FilePointer() noexcept :
-        x_bVld {false}, x_bVld1 {false}, x_bVld2 {false}, x_bVld3 {false}
-    {}
+    constexpr FilePointer() noexcept = default;
 
     inline void Sync() const noexcept {
         ShrSync(x_sp);
@@ -31,7 +29,8 @@ public:
 
     template<class tObj>
     inline ShrPtr<tObj> Seek(Xxfs *px, Inode *pi, uint32_t vcn) noexcept(!kAlloc) {
-        return std::reinterpret_pointer_cast<tObj>(X_Seek(px, pi, vcn));
+        auto &&sp = X_Seek(px, pi, vcn);
+        return std::reinterpret_pointer_cast<tObj>(sp);
     }
 
 private:
@@ -41,18 +40,16 @@ private:
     void X_Seek2(Xxfs *px, Inode *pi, uint32_t vcnOff, uint32_t vcn, uint32_t *pLcns) noexcept(!kAlloc);
 
 private:
-    uint32_t x_vcn = 0;
-    uint32_t x_vcn1 = 0;
-    uint32_t x_vcn2 = 0;
-    uint32_t x_bVld : 1;
-    uint32_t x_bVld1 : 1;
-    uint32_t x_bVld2 : 1;
-    uint32_t x_bVld3 : 1;
-    uint32_t : 0;
     ShrPtr<void> x_sp;
     ShrPtr<IndexCluster> x_sp1;
     ShrPtr<IndexCluster> x_sp2;
     ShrPtr<IndexCluster> x_sp3;
+    uint32_t x_lcn = 0;
+    uint32_t x_lcn1 = 0;
+    uint32_t x_lcn2 = 0;
+    uint32_t x_vcn = 0;
+    uint32_t x_vcn1 = 0;
+    uint32_t x_vcn2 = 0;
 
 };
 

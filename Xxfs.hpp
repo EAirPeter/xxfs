@@ -77,10 +77,24 @@ private:
         return x_vCluCache.At<tObj>(lcn);
     }
 
+    inline void Y_Touch(uint32_t lcn) noexcept {
+        x_vCluCache.Touch(lcn);
+    }
+
 private:
     // allocate a free cluster and update inode if lin is 0
     // invokes Y_AllocClu
-    void Y_FileAllocClu(Inode *pi, uint32_t &lcn);
+    template<class tObj>
+    inline ShrPtr<tObj> Y_FileAllocClu(Inode *pi, uint32_t &lcn) {
+        if (x_spcMeta->ccUsed >= x_spcMeta->ccTotal)
+            throw Exception {ENOSPC};
+        lcn = x_vCluAlloc.Alloc();
+        ++x_spcMeta->ccUsed;
+        ++pi->ccSize;
+        auto &&spc = Y_Map<tObj>(lcn);
+        memset(spc.get(), 0, kcbCluSize);
+        return std::move(spc);
+    }
     // only used in shrink
     // check if each lcn is 0, do not double free
     void Y_FileFreeClu(Inode *pi, uint32_t &lcn) noexcept;
@@ -96,8 +110,8 @@ private:
 private:
     RaiiFile x_vRf;
     ShrPtr<MetaCluster> x_spcMeta;
-    ClusterCache<65536> x_vCluCache;
-    ClusterCache<4096> x_vInoCluCache;
+    ClusterCache<256> x_vCluCache;
+    ClusterCache<64> x_vInoCluCache;
     BitmapAllocator x_vCluAlloc;
     BitmapAllocator x_vInoAlloc;
     

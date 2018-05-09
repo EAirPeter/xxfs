@@ -40,6 +40,8 @@ constexpr OpenedDir *GetDir(fuse_file_info *pInfo) {
 }
 
 int XxfsGetAttr(const char *pszPath, FileStat *pStat, fuse_file_info *pInfo) {
+    if (f_bVerbose)
+        printf("%s(%s)\n", __func__, pszPath);
     try {
         auto pFile = GetFile(pInfo);
         if (pFile) {
@@ -63,6 +65,8 @@ int XxfsGetAttr(const char *pszPath, FileStat *pStat, fuse_file_info *pInfo) {
 }
 
 int XxfsReadLink(const char *pszPath, char *pBuf, size_t cbSize) {
+    if (f_bVerbose)
+        printf("%s(%s)\n", __func__, pszPath);
     try {
         auto px = GetXxfs();
         auto lin = px->LinAt(pszPath);
@@ -81,6 +85,8 @@ int XxfsReadLink(const char *pszPath, char *pBuf, size_t cbSize) {
 }
 
 int XxfsMkDir(const char *pszPath, mode_t) {
+    if (f_bVerbose)
+        printf("%s(%s)\n", __func__, pszPath);
     try {
         auto px = GetXxfs();
         auto linPar = px->LinPar(pszPath);
@@ -99,6 +105,8 @@ int XxfsMkDir(const char *pszPath, mode_t) {
 }
 
 int XxfsUnlink(const char *pszPath) {
+    if (f_bVerbose)
+        printf("%s(%s)\n", __func__, pszPath);
     try {
         auto px = GetXxfs();
         auto linPar = px->LinPar(pszPath);
@@ -117,6 +125,8 @@ int XxfsUnlink(const char *pszPath) {
 }
 
 int XxfsRmDir(const char *pszPath) {
+    if (f_bVerbose)
+        printf("%s(%s)\n", __func__, pszPath);
     try {
         auto px = GetXxfs();
         auto linPar = px->LinPar(pszPath);
@@ -135,6 +145,8 @@ int XxfsRmDir(const char *pszPath) {
 }
 
 int XxfsSymLink(const char *pszLink, const char *pszPath) {
+    if (f_bVerbose)
+        printf("%s(%s)\n", __func__, pszPath);
     try {
         auto px = GetXxfs();
         auto linPar = px->LinPar(pszPath);
@@ -153,6 +165,8 @@ int XxfsSymLink(const char *pszLink, const char *pszPath) {
 }
 
 int XxfsRename(const char *pszPath, const char *pszNewPath, unsigned uFlags) {
+    if (f_bVerbose)
+        printf("%s(%s)\n", __func__, pszPath);
     try {
         auto px = GetXxfs();
         auto linPar = px->LinPar(pszPath);
@@ -172,6 +186,8 @@ int XxfsRename(const char *pszPath, const char *pszNewPath, unsigned uFlags) {
 }
 
 int XxfsLink(const char *pszPath, const char *pszNewPath) {
+    if (f_bVerbose)
+        printf("%s(%s)\n", __func__, pszPath);
     try {
         auto px = GetXxfs();
         auto lin = px->LinAt(pszPath);
@@ -192,6 +208,8 @@ int XxfsLink(const char *pszPath, const char *pszNewPath) {
 
 // TODO: move part of the code into Xxfs
 int XxfsTruncate(const char *pszPath, off_t cbNewSize, fuse_file_info *pInfo) {
+    if (f_bVerbose)
+        printf("%s(%s)\n", __func__, pszPath);
     try {
         auto pFile = GetNdir(pInfo);
         if (pFile) {
@@ -217,6 +235,8 @@ int XxfsTruncate(const char *pszPath, off_t cbNewSize, fuse_file_info *pInfo) {
 }
 
 int XxfsOpen(const char *pszPath, fuse_file_info *pInfo) {
+    if (f_bVerbose)
+        printf("%s(%s)\n", __func__, pszPath);
     try {
         auto px = GetXxfs();
         auto lin = px->LinAt(pszPath);
@@ -234,7 +254,9 @@ int XxfsOpen(const char *pszPath, fuse_file_info *pInfo) {
     }
 }
 
-int XxfsRead(const char *, char *pBuf, size_t cbSize, off_t cbOff, fuse_file_info *pInfo) {
+int XxfsRead(const char *pszPath, char *pBuf, size_t cbSize, off_t cbOff, fuse_file_info *pInfo) {
+    if (f_bVerbose)
+        printf("%s(%s)\n", __func__, pszPath);
     try {
         auto px = GetXxfs();
         return (int) px->Read(GetNdir(pInfo), pBuf, (uint64_t) cbSize, (uint64_t) cbOff);
@@ -250,7 +272,9 @@ int XxfsRead(const char *, char *pBuf, size_t cbSize, off_t cbOff, fuse_file_inf
     }
 }
 
-int XxfsWrite(const char *, const char *pBuf, size_t cbSize, off_t cbOff, fuse_file_info *pInfo) {
+int XxfsWrite(const char *pszPath, const char *pBuf, size_t cbSize, off_t cbOff, fuse_file_info *pInfo) {
+    if (f_bVerbose)
+        printf("%s(%s)\n", __func__, pszPath);
     try {
         auto px = GetXxfs();
         return (int) px->Write(GetNdir(pInfo), pBuf, (uint64_t) cbSize, (uint64_t) cbOff);
@@ -266,7 +290,9 @@ int XxfsWrite(const char *, const char *pBuf, size_t cbSize, off_t cbOff, fuse_f
     }
 }
 
-int XxfsStatFs(const char *, VfsStat *pStat) {
+int XxfsStatFs(const char *pszPath, VfsStat *pStat) {
+    if (f_bVerbose)
+        printf("%s(%s)\n", __func__, pszPath);
     try {
         auto px = GetXxfs();
         px->StatFs(*pStat);
@@ -283,7 +309,9 @@ int XxfsStatFs(const char *, VfsStat *pStat) {
     }
 }
 
-int XxfsRelease(const char *, fuse_file_info *pInfo) {
+int XxfsRelease(const char *pszPath, fuse_file_info *pInfo) {
+    if (f_bVerbose)
+        printf("%s(%s)\n", __func__, pszPath);
     try {
         auto px = GetXxfs();
         px->Release(GetNdir(pInfo));
@@ -300,7 +328,9 @@ int XxfsRelease(const char *, fuse_file_info *pInfo) {
     }
 }
 
-int XxfsFSync(const char *, int, fuse_file_info *pInfo) {
+int XxfsFSync(const char *pszPath, int, fuse_file_info *pInfo) {
+    if (f_bVerbose)
+        printf("%s(%s)\n", __func__, pszPath);
     try {
         auto px = GetXxfs();
         px->FSync(GetNdir(pInfo));
@@ -318,6 +348,8 @@ int XxfsFSync(const char *, int, fuse_file_info *pInfo) {
 }
 
 int XxfsOpenDir(const char *pszPath, fuse_file_info *pInfo) {
+    if (f_bVerbose)
+        printf("%s(%s)\n", __func__, pszPath);
     try {
         auto px = GetXxfs();
         auto lin = px->LinAt(pszPath);
@@ -336,9 +368,11 @@ int XxfsOpenDir(const char *pszPath, fuse_file_info *pInfo) {
 }
 
 int XxfsReadDir(
-    const char *, void *pBuf, fuse_fill_dir_t fnFill,
+    const char *pszPath, void *pBuf, fuse_fill_dir_t fnFill,
     off_t vOff, fuse_file_info *pInfo, fuse_readdir_flags
 ) {
+    if (f_bVerbose)
+        printf("%s(%s)\n", __func__, pszPath);
     try {
         auto px = GetXxfs();
         px->ReadDir(GetDir(pInfo), pBuf, fnFill, vOff);
@@ -355,7 +389,9 @@ int XxfsReadDir(
     }
 }
 
-int XxfsReleaseDir(const char *, fuse_file_info *pInfo) {
+int XxfsReleaseDir(const char *pszPath, fuse_file_info *pInfo) {
+    if (f_bVerbose)
+        printf("%s(%s)\n", __func__, pszPath);
     try {
         auto px = GetXxfs();
         px->ReleaseDir(GetDir(pInfo));
@@ -373,6 +409,8 @@ int XxfsReleaseDir(const char *, fuse_file_info *pInfo) {
 }
 
 int XxfsCreate(const char *pszPath, mode_t, fuse_file_info *pInfo) {
+    if (f_bVerbose)
+        printf("%s(%s)\n", __func__, pszPath);
     try {
         auto px = GetXxfs();
         auto linPar = px->LinPar(pszPath);
@@ -441,6 +479,7 @@ void ShowHelp(const char *pszExec) {
         "Usage: %s [-v] filepath mountpoint\n"
         "\n"
         "Options:\n"
+        "    -f       run in foreground\n"
         "    -v       enable verbose mode\n"
         "    -h       print this help\n",
         pszExec
@@ -453,11 +492,15 @@ int main(int ncArg, char *ppszArgs[]) {
     using namespace xxfs;
     const char *pszPath = nullptr;
     const char *pszMountPoint = nullptr;
+    bool bForeground = false;
     bool bHelp = false;
     bool bIncorrect = false;
     int chOpt;
-    while ((chOpt = getopt(ncArg, ppszArgs, ":hv")) != -1) {
+    while ((chOpt = getopt(ncArg, ppszArgs, ":fhv")) != -1) {
         switch (chOpt) {
+        case 'f':
+            bForeground = true;
+            break;
         case 'v':
             f_bVerbose = true;
             break;
@@ -522,7 +565,7 @@ int main(int ncArg, char *ppszArgs[]) {
     }
     std::aligned_storage_t<sizeof(Xxfs)> vXxfs;
     try {
-        ::new(&vXxfs) Xxfs {std::move(vRf), std::move(spcMeta)};
+        ::new(&vXxfs) Xxfs(std::move(vRf), std::move(spcMeta));
     }
     catch (FatalException &e) {
         e.ShowWhat(stderr);
@@ -532,9 +575,10 @@ int main(int ncArg, char *ppszArgs[]) {
     fuse_args vArgs {};
     fuse_opt_add_arg(&vArgs, ppszArgs[0]);
     fuse_opt_add_arg(&vArgs, "-s");
-    fuse_opt_add_arg(&vArgs, "-f");
-    fuse_opt_add_arg(&vArgs, pszMountPoint);
+    if (bForeground)
+        fuse_opt_add_arg(&vArgs, "-f");
     if (f_bVerbose)
         fuse_opt_add_arg(&vArgs, "-d");
+    fuse_opt_add_arg(&vArgs, pszMountPoint);
     return fuse_main(vArgs.argc, vArgs.argv, &vOps, &vXxfs);
 }

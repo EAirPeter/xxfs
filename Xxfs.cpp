@@ -406,14 +406,6 @@ void Xxfs::Y_UnlinkIno(uint32_t lin, Inode *pi) noexcept {
     --x_spcMeta->ciUsed;
 }
 
-void Xxfs::Y_FileAllocClu(Inode *pi, uint32_t &lcn) {
-    if (x_spcMeta->ccUsed >= x_spcMeta->ccTotal)
-        throw Exception {ENOSPC};
-    lcn = x_vCluAlloc.Alloc();
-    ++x_spcMeta->ccUsed;
-    ++pi->ccSize;
-}
-
 void Xxfs::Y_FileFreeClu(Inode *pi, uint32_t &lcn) noexcept {
     if (!lcn)
         return;
@@ -431,7 +423,8 @@ void Xxfs::Y_FileFreeIdx1(Inode *pi, uint32_t &lcn, uint32_t vcnFrom) noexcept {
         for (uint32_t i = vcnFrom; i < kcnPerClu; ++i)
             Y_FileFreeClu(pi, spc->aLcns[i]);
     }
-    Y_FileFreeClu(pi, lcn);
+    if (!vcnFrom)
+        Y_FileFreeClu(pi, lcn);
 }
 
 void Xxfs::Y_FileFreeIdx2(Inode *pi, uint32_t &lcn, uint32_t vcnFrom) noexcept {
@@ -445,7 +438,8 @@ void Xxfs::Y_FileFreeIdx2(Inode *pi, uint32_t &lcn, uint32_t vcnFrom) noexcept {
         for (uint32_t i = idx1 + 1; i < kcnPerClu; ++i)
             Y_FileFreeIdx1(pi, spc->aLcns[i]);
     }
-    Y_FileFreeClu(pi, lcn);
+    if (!vcnFrom)
+        Y_FileFreeClu(pi, lcn);
 }
 
 void Xxfs::Y_FileFreeIdx3(Inode *pi, uint32_t &lcn, uint32_t vcnFrom) noexcept {
@@ -459,7 +453,8 @@ void Xxfs::Y_FileFreeIdx3(Inode *pi, uint32_t &lcn, uint32_t vcnFrom) noexcept {
         for (uint32_t i = idx2 + 1; i < kcnPerClu; ++i)
             Y_FileFreeIdx2(pi, spc->aLcns[i]);
     }
-    Y_FileFreeClu(pi, lcn);
+    if (!vcnFrom)
+        Y_FileFreeClu(pi, lcn);
 }
 
 void Xxfs::Y_FileShrink(Inode *pi) noexcept {

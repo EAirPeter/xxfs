@@ -183,7 +183,7 @@ int main(int ncArg, char *ppszArgs[]) {
                 printf("ccTotal = %" PRIu32 "\n", spcMeta->ccTotal);
                 printf("ccUsed = %" PRIu32 "\n", spcMeta->ccUsed);
                 printf("ciTotal = %" PRIu32 "\n", spcMeta->ciTotal);
-                printf("ciTotal = %" PRIu32 "\n", spcMeta->ciUsed);
+                printf("ciUsed = %" PRIu32 "\n", spcMeta->ciUsed);
                 printf("lcnCluBmp = %" PRIu32 "\n", spcMeta->lcnCluBmp);
                 printf("ccCluBmp = %" PRIu32 "\n", spcMeta->ccCluBmp);
                 printf("lcnInoBmp = %" PRIu32 "\n", spcMeta->lcnInoBmp);

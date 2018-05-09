@@ -1,9 +1,9 @@
 FUSE_CFLAGS = $(shell pkg-config --cflags fuse3)
 FUSE_LIBS = $(shell pkg-config --libs fuse3)
 
-CXXFLAGS := -Wall -Wextra -std=c++17 -ggdb
+CXXFLAGS := -Wall -Wextra -std=c++17 -O2 -flto
 CXXFLAGS += $(FUSE_CFLAGS)
-LIBS := -ggdb
+LIBS := -O2 -flto
 LIBS += $(FUSE_LIBS)
 
 CXX := g++
